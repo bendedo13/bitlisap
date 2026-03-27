@@ -1,0 +1,103 @@
+version: '3.8'
+
+# ============================================
+# BITLIS SEHRIM - Docker Compose
+# ============================================
+# Isolated network & ports to avoid conflicts
+# with other VPS projects
+
+services:
+  # PostgreSQL Database
+  bitlis_db:
+    image: postgres:16-alpine
+    container_name: bitlis_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-bitlis_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me_strong_password}
+      POSTGRES_DB: ${DB_NAME:-bitlis_sehrim}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - bitlis_pgdata:/var/lib/postgresql/data
+    networks:
+      - bitlis_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-bitlis_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  bitlis_redis:
+    image: redis:7-alpine
+    container_name: bitlis_redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-change_me_redis_password}
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - bitlis_redisdata:/data
+    networks:
+      - bitlis_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-change_me_redis_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  bitlis_api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bitlis_api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-bitlis_user}:${DB_PASSWORD:-change_me_strong_password}@bitlis_db:5432/${DB_NAME:-bitlis_sehrim}
+      REDIS_HOST: bitlis_redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-change_me_redis_password}
+      NODE_ENV: ${NODE_ENV:-development}
+      API_PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:-change_me_jwt_secret_min_32_chars}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    depends_on:
+      bitlis_db:
+        condition: service_healthy
+      bitlis_redis:
+        condition: service_healthy
+    networks:
+      - bitlis_network
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+
+  # Admin Panel
+  bitlis_admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: bitlis_admin
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://bitlis_api:3001
+      NODE_ENV: ${NODE_ENV:-development}
+    ports:
+      - "${ADMIN_PORT:-3002}:3000"
+    depends_on:
+      - bitlis_api
+    networks:
+      - bitlis_network
+
+volumes:
+  bitlis_pgdata:
+    name: bitlis_pgdata
+  bitlis_redisdata:
+    name: bitlis_redisdata
+
+networks:
+  bitlis_network:
+    name: bitlis_network
+    driver: bridge
