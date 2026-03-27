@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Bitlis Şehrim",
+    "slug": "bitlis-sehrim",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "bitlis-sehrim",
+    "splash": {
+      "backgroundColor": "#1B4F72"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bitlis.sehrim",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Yakınındaki işletmeleri görmek için konum izni gerekli."
+      }
+    },
+    "android": {
+      "package": "com.bitlis.sehrim",
+      "adaptiveIcon": {
+        "backgroundColor": "#1B4F72"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-location",
+      "expo-image-picker",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bitlis-sehrim"
+      }
+    }
+  }
+}
