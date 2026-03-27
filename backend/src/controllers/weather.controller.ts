@@ -13,7 +13,7 @@ async function fetchWeather(
       error: 'OpenWeather API key ayarlanmamis',
       demo: true,
       temp: 12,
-      description: 'Parçalı bulutlu',
+      description: 'Par\u00e7al\u0131 bulutlu',
       city: 'Bitlis',
     };
   }
