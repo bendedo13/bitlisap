@@ -119,6 +119,26 @@ export default function HomeScreen() {
         Bitlis'te bugün neler oluyor?
       </Text>
 
+      <TouchableOpacity
+        className="bg-white rounded-xl px-4 py-3 mb-4 flex-row items-center border border-gray-100"
+        onPress={() => router.push('/search')}
+        accessibilityLabel="Genel arama"
+      >
+        <Ionicons
+          name="search"
+          size={22}
+          color={colors.primary}
+        />
+        <Text className="text-gray-400 ml-3 flex-1">
+          Haber, ilan, işletme ara...
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color="#ccc"
+        />
+      </TouchableOpacity>
+
       {/* Weather */}
       <WeatherWidget />
 

@@ -5,6 +5,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { EmptyState } from '../../components/EmptyState';
+import { NewsListSkeleton } from '../../components/SkeletonList';
 import { router } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -174,18 +176,13 @@ export default function NewsScreen() {
       />
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-          />
-        </View>
+        <NewsListSkeleton />
       ) : allNews.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <Text className="text-gray-400 text-base">
-            Henüz haber yok
-          </Text>
-        </View>
+        <EmptyState
+          icon="newspaper-outline"
+          title="Henüz haber yok"
+          subtitle="Yakında şehrinizden haberler burada görünecek. Aşağı çekerek yenileyebilirsiniz."
+        />
       ) : (
         <FlashList
           data={allNews}

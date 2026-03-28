@@ -95,6 +95,28 @@ export default function ProfileScreen() {
             Giriş Yap
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          className="mt-6"
+          onPress={() => router.push('/legal/privacy')}
+        >
+          <Text
+            style={{ color: colors.primary }}
+            className="text-sm underline"
+          >
+            Gizlilik Sözleşmesi
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          className="mt-2"
+          onPress={() => router.push('/legal/terms')}
+        >
+          <Text
+            style={{ color: colors.primary }}
+            className="text-sm underline"
+          >
+            Kullanım Şartları
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -137,6 +159,11 @@ export default function ProfileScreen() {
 
       {/* Menu */}
       <View className="mt-4">
+        <MenuItem
+          icon="search"
+          label="Genel arama"
+          onPress={() => router.push('/search')}
+        />
         <MenuItem
           icon="list"
           label="İlanlarım"
@@ -192,6 +219,16 @@ export default function ProfileScreen() {
       </View>
 
       <View className="mt-4 mb-8">
+        <MenuItem
+          icon="document-text-outline"
+          label="Gizlilik Sözleşmesi"
+          onPress={() => router.push('/legal/privacy')}
+        />
+        <MenuItem
+          icon="reader-outline"
+          label="Kullanım Şartları"
+          onPress={() => router.push('/legal/terms')}
+        />
         <MenuItem
           icon="settings"
           label="Ayarlar"

@@ -1,30 +1,17 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
+import type { z } from 'zod';
+import { paginationQuerySchema } from '../validation/schemas';
 
 const prisma = new PrismaClient();
 
-const createEventSchema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  startsAt: z.string().datetime(),
-  endsAt: z.string().datetime().optional(),
-  category: z.string().max(50).optional(),
-  isFree: z.boolean().optional(),
-  ticketPrice: z.number().positive().optional(),
-  maxAttendees: z.number().int().positive().optional(),
-  coverImage: z.string().url().optional(),
-});
+type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
 export async function getEvents(
   req: Request,
   res: Response
 ): Promise<void> {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = 20;
+  const { page, limit } = req.validatedQuery as PaginationQuery;
 
   const [data, total] = await Promise.all([
     prisma.event.findMany({
@@ -66,8 +53,9 @@ export async function getEventById(
   req: Request,
   res: Response
 ): Promise<void> {
+  const { id } = req.validatedParams as { id: string };
   const event = await prisma.event.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: {
       organizer: {
         select: {
@@ -98,22 +86,35 @@ export async function createEvent(
     return;
   }
 
-  const parsed = createEventSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as {
+    title: string;
+    description?: string;
+    location?: string;
+    latitude?: number;
+    longitude?: number;
+    startsAt: string;
+    endsAt?: string;
+    category?: string;
+    isFree?: boolean;
+    ticketPrice?: number;
+    maxAttendees?: number;
+    coverImage?: string;
+  };
 
   const event = await prisma.event.create({
     data: {
-      ...parsed.data,
-      startsAt: new Date(parsed.data.startsAt),
-      endsAt: parsed.data.endsAt
-        ? new Date(parsed.data.endsAt)
-        : null,
+      title: body.title,
+      description: body.description,
+      location: body.location,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      startsAt: new Date(body.startsAt),
+      endsAt: body.endsAt ? new Date(body.endsAt) : null,
+      category: body.category,
+      isFree: body.isFree ?? true,
+      ticketPrice: body.ticketPrice,
+      maxAttendees: body.maxAttendees,
+      coverImage: body.coverImage,
       organizerId: req.user.userId,
     },
   });
@@ -130,8 +131,9 @@ export async function attendEvent(
     return;
   }
 
+  const { id } = req.validatedParams as { id: string };
   const event = await prisma.event.findUnique({
-    where: { id: req.params.id },
+    where: { id },
   });
 
   if (!event) {
@@ -152,11 +154,10 @@ export async function attendEvent(
   }
 
   const updated = await prisma.event.update({
-    where: { id: req.params.id },
+    where: { id },
     data: { attendeeCount: { increment: 1 } },
   });
 
-  // Puan ekle
   await prisma.pointTransaction.create({
     data: {
       userId: req.user.userId,

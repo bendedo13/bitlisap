@@ -2,6 +2,7 @@ import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
 import { config } from '../config';
 import { Request, Response, NextFunction } from 'express';
+import { optimizeMobileImageUrl } from '../utils/cloudinaryImage';
 
 if (
   config.CLOUDINARY_CLOUD_NAME &&
@@ -36,12 +37,25 @@ export async function uploadToCloudinary(
   return new Promise((resolve, reject) => {
     cloudinary.uploader
       .upload_stream(
-        { folder: `bitlis-sehrim/${folder}` },
+        {
+          folder: `bitlis-sehrim/${folder}`,
+          transformation: [
+            {
+              width: 1600,
+              height: 1600,
+              crop: 'limit',
+            },
+            { fetch_format: 'auto', quality: 'auto' },
+          ],
+        },
         (error, result) => {
           if (error || !result) {
             reject(error ?? new Error('Upload basarisiz'));
           } else {
-            resolve(result.secure_url);
+            resolve(
+              optimizeMobileImageUrl(result.secure_url, 1200) ??
+                result.secure_url
+            );
           }
         }
       )

@@ -12,6 +12,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../constants/theme';
 import { useAuthStore } from '../../../store/authStore';
+import { EmptyState } from '../../../components/EmptyState';
 
 interface ChatMessage {
   id: string;
@@ -41,19 +42,11 @@ export default function ChatScreen() {
       keyboardVerticalOffset={90}
     >
       {messages.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <Ionicons
-            name="chatbubbles-outline"
-            size={48}
-            color="#ccc"
-          />
-          <Text className="text-gray-400 mt-2">
-            Henüz mesaj yok
-          </Text>
-          <Text className="text-gray-300 text-sm">
-            İlk mesajı gönderin
-          </Text>
-        </View>
+        <EmptyState
+          icon="chatbubbles-outline"
+          title="Henüz mesaj yok"
+          subtitle="İlk mesajı göndererek görüşmeyi başlatın. Mesajlar sunucuya kaydedilir."
+        />
       ) : (
         <FlatList
           data={messages}

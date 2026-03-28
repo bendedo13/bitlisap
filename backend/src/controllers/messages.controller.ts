@@ -1,7 +1,11 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import type { z } from 'zod';
+import { messagesPageQuerySchema } from '../validation/schemas';
 
 const prisma = new PrismaClient();
+
+type MessagesPageQuery = z.infer<typeof messagesPageQuerySchema>;
 
 export async function getConversations(
   req: Request,
@@ -45,8 +49,13 @@ export async function getMessages(
     return;
   }
 
+  const { id: conversationId } = req.validatedParams as {
+    id: string;
+  };
+  const { page, limit } = req.validatedQuery as MessagesPageQuery;
+
   const conversation = await prisma.conversation.findUnique(
-    { where: { id: req.params.id } }
+    { where: { id: conversationId } }
   );
 
   if (
@@ -59,11 +68,8 @@ export async function getMessages(
     return;
   }
 
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = 50;
-
   const messages = await prisma.message.findMany({
-    where: { conversationId: req.params.id },
+    where: { conversationId },
     orderBy: { createdAt: 'desc' },
     skip: (page - 1) * limit,
     take: limit,
@@ -78,10 +84,9 @@ export async function getMessages(
     },
   });
 
-  // Mesajlari okundu isaretle
   await prisma.message.updateMany({
     where: {
-      conversationId: req.params.id,
+      conversationId,
       receiverId: req.user.userId,
       isRead: false,
     },
@@ -100,8 +105,12 @@ export async function startConversation(
     return;
   }
 
+  const { listingId } = req.validatedParams as {
+    listingId: string;
+  };
+
   const listing = await prisma.listing.findUnique({
-    where: { id: req.params.listingId },
+    where: { id: listingId },
   });
 
   if (!listing) {
@@ -109,7 +118,6 @@ export async function startConversation(
     return;
   }
 
-  // Mevcut konusma var mi kontrol et
   const existing = await prisma.conversation.findFirst({
     where: {
       listingId: listing.id,

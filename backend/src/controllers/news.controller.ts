@@ -1,27 +1,19 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
+import type { z } from 'zod';
+import { newsListQuerySchema } from '../validation/schemas';
+import { notifyUsersNewNews } from '../services/push.service';
 
 const prisma = new PrismaClient();
 
-const createNewsSchema = z.object({
-  title: z.string().min(3).max(300),
-  content: z.string().optional(),
-  summary: z.string().max(500).optional(),
-  category: z.string().max(50).optional(),
-  thumbnailUrl: z.string().url().optional(),
-  sourceUrl: z.string().url().optional(),
-  isBreaking: z.boolean().optional(),
-  isOfficial: z.boolean().optional(),
-});
+type NewsListQuery = z.infer<typeof newsListQuerySchema>;
 
 export async function getNewsList(
   req: Request,
   res: Response
 ): Promise<void> {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = 20;
-  const category = req.query.category as string;
+  const { page, limit, category } =
+    req.validatedQuery as NewsListQuery;
 
   const where = category ? { category } : {};
 
@@ -59,8 +51,9 @@ export async function getNewsById(
   req: Request,
   res: Response
 ): Promise<void> {
+  const { id } = req.validatedParams as { id: string };
   const news = await prisma.news.update({
-    where: { id: req.params.id },
+    where: { id },
     data: { viewCount: { increment: 1 } },
     include: {
       author: {
@@ -90,21 +83,32 @@ export async function createNews(
     return;
   }
 
-  const parsed = createNewsSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as {
+    title: string;
+    content?: string;
+    summary?: string;
+    category?: string;
+    thumbnailUrl?: string;
+    sourceUrl?: string;
+    isBreaking?: boolean;
+    isOfficial?: boolean;
+  };
 
   const news = await prisma.news.create({
     data: {
-      ...parsed.data,
+      title: body.title,
+      content: body.content,
+      summary: body.summary,
+      category: body.category,
+      thumbnailUrl: body.thumbnailUrl,
+      sourceUrl: body.sourceUrl,
+      isBreaking: body.isBreaking,
+      isOfficial: body.isOfficial,
       authorId: req.user.userId,
     },
   });
+
+  void notifyUsersNewNews(news.title, news.id).catch(() => {});
 
   res.status(201).json(news);
 }
@@ -113,8 +117,9 @@ export async function likeNews(
   req: Request,
   res: Response
 ): Promise<void> {
+  const { id } = req.validatedParams as { id: string };
   const news = await prisma.news.update({
-    where: { id: req.params.id },
+    where: { id },
     data: { likeCount: { increment: 1 } },
   });
 

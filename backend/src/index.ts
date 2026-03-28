@@ -6,6 +6,11 @@ import { config } from './config';
 import { generalLimiter } from './middleware/rateLimit';
 import { handleUploadError } from './middleware/upload';
 import { setupSocketHandlers } from './socket/chat';
+import {
+  errorHandler,
+  notFoundHandler,
+} from './middleware/errorHandler';
+import { logger } from './utils/logger';
 
 // Routes
 import authRoutes from './routes/auth.routes';
@@ -19,6 +24,8 @@ import weatherRoutes from './routes/weather.routes';
 import emergencyRoutes from './routes/emergency.routes';
 import notificationsRoutes
   from './routes/notifications.routes';
+import searchRoutes from './routes/search.routes';
+import legalRoutes from './routes/legal.routes';
 
 const app = express();
 const httpServer = createServer(app);
@@ -63,39 +70,20 @@ app.use('/api/messages', messagesRoutes);
 app.use('/api/weather', weatherRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/legal', legalRoutes);
 
-// Error handling
+app.use(notFoundHandler);
 app.use(handleUploadError);
-
-app.use(
-  (
-    err: Error,
-    _req: express.Request,
-    res: express.Response,
-    _next: express.NextFunction
-  ) => {
-    console.error('Unhandled error:', err);
-    res.status(500).json({
-      error: 'Sunucu hatasi',
-      ...(config.NODE_ENV === 'development' && {
-        message: err.message,
-      }),
-    });
-  }
-);
-
-// 404
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Endpoint bulunamadi' });
-});
+app.use(errorHandler);
 
 // Start
 const PORT = config.API_PORT;
 httpServer.listen(PORT, config.API_HOST, () => {
-  console.log(
+  logger.info(
     `Bitlis Sehrim API calisiyor: http://localhost:${PORT}`
   );
-  console.log(`Ortam: ${config.NODE_ENV}`);
+  logger.info(`Ortam: ${config.NODE_ENV}`);
 });
 
 export { app, httpServer, io };

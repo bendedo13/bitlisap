@@ -1,7 +1,11 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import type { z } from 'zod';
+import { paginationQuerySchema } from '../validation/schemas';
 
 const prisma = new PrismaClient();
+
+type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
 export async function getNotifications(
   req: Request,
@@ -12,8 +16,7 @@ export async function getNotifications(
     return;
   }
 
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = 30;
+  const { page, limit } = req.validatedQuery as PaginationQuery;
 
   const [data, total, unread] = await Promise.all([
     prisma.notification.findMany({
@@ -54,8 +57,19 @@ export async function markAsRead(
     return;
   }
 
+  const { id } = req.validatedParams as { id: string };
+
+  const notif = await prisma.notification.findFirst({
+    where: { id, userId: req.user.userId },
+  });
+
+  if (!notif) {
+    res.status(404).json({ error: 'Bildirim bulunamadi' });
+    return;
+  }
+
   await prisma.notification.update({
-    where: { id: req.params.id },
+    where: { id },
     data: { isRead: true },
   });
 
@@ -71,13 +85,7 @@ export async function saveFcmToken(
     return;
   }
 
-  const { token } = req.body;
-  if (!token) {
-    res.status(400).json({
-      error: 'FCM token gerekli',
-    });
-    return;
-  }
+  const { token } = req.body as { token: string };
 
   await prisma.user.update({
     where: { id: req.user.userId },

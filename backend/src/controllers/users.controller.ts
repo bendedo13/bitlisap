@@ -1,23 +1,20 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
+import type { z } from 'zod';
+import { paginationQuerySchema } from '../validation/schemas';
 
 const prisma = new PrismaClient();
 
-const updateProfileSchema = z.object({
-  fullName: z.string().max(100).optional(),
-  email: z.string().email().optional(),
-  neighborhood: z.string().max(50).optional(),
-  district: z.string().max(50).optional(),
-  avatarUrl: z.string().url().optional(),
-});
+type PaginationQuery = z.infer<typeof paginationQuerySchema>;
 
 export async function getUserById(
   req: Request,
   res: Response
 ): Promise<void> {
+  const { id } = req.validatedParams as { id: string };
+
   const user = await prisma.user.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     select: {
       id: true,
       fullName: true,
@@ -52,18 +49,17 @@ export async function updateProfile(
     return;
   }
 
-  const parsed = updateProfileSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as {
+    fullName?: string;
+    email?: string;
+    neighborhood?: string;
+    district?: string;
+    avatarUrl?: string;
+  };
 
   const user = await prisma.user.update({
     where: { id: req.user.userId },
-    data: parsed.data,
+    data: body,
     select: {
       id: true,
       phone: true,
@@ -89,8 +85,7 @@ export async function getMyListings(
     return;
   }
 
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = 20;
+  const { page, limit } = req.validatedQuery as PaginationQuery;
 
   const listings = await prisma.listing.findMany({
     where: { sellerId: req.user.userId },

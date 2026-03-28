@@ -1,32 +1,18 @@
 import { Request, Response } from 'express';
 import { PrismaClient, ListingStatus } from '@prisma/client';
-import { z } from 'zod';
+import type { z } from 'zod';
+import { listingsQuerySchema } from '../validation/schemas';
 
 const prisma = new PrismaClient();
 
-const createListingSchema = z.object({
-  title: z.string().min(3).max(200),
-  description: z.string().optional(),
-  category: z.string().max(50).optional(),
-  subcategory: z.string().max(50).optional(),
-  price: z.number().positive().optional(),
-  isNegotiable: z.boolean().optional(),
-  photos: z.array(z.string().url()).max(10).optional(),
-  district: z.string().max(50).optional(),
-});
-
-const updateListingSchema = createListingSchema.partial()
-  .extend({
-    status: z.nativeEnum(ListingStatus).optional(),
-  });
+type ListingsQuery = z.infer<typeof listingsQuerySchema>;
 
 export async function getListings(
   req: Request,
   res: Response
 ): Promise<void> {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = 20;
-  const { category, district, sort } = req.query;
+  const { page, limit, category, district, sort } =
+    req.validatedQuery as ListingsQuery;
 
   const where: Record<string, unknown> = {
     status: 'ACTIVE',
@@ -78,8 +64,9 @@ export async function getListingById(
   req: Request,
   res: Response
 ): Promise<void> {
+  const { id } = req.validatedParams as { id: string };
   const listing = await prisma.listing.update({
-    where: { id: req.params.id },
+    where: { id },
     data: { viewCount: { increment: 1 } },
     include: {
       seller: {
@@ -111,25 +98,31 @@ export async function createListing(
     return;
   }
 
-  const parsed = createListingSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as {
+    title: string;
+    description?: string;
+    category?: string;
+    subcategory?: string;
+    price?: number;
+    isNegotiable?: boolean;
+    photos?: string[];
+    district?: string;
+  };
 
   const listing = await prisma.listing.create({
     data: {
-      ...parsed.data,
-      price: parsed.data.price ?? null,
-      photos: parsed.data.photos ?? [],
+      title: body.title,
+      description: body.description,
+      category: body.category,
+      subcategory: body.subcategory,
+      price: body.price ?? null,
+      isNegotiable: body.isNegotiable ?? true,
+      photos: body.photos ?? [],
+      district: body.district,
       sellerId: req.user.userId,
     },
   });
 
-  // Puan ekle
   await prisma.pointTransaction.create({
     data: {
       userId: req.user.userId,
@@ -156,8 +149,9 @@ export async function updateListing(
     return;
   }
 
+  const { id } = req.validatedParams as { id: string };
   const listing = await prisma.listing.findUnique({
-    where: { id: req.params.id },
+    where: { id },
   });
 
   if (!listing) {
@@ -173,18 +167,21 @@ export async function updateListing(
     return;
   }
 
-  const parsed = updateListingSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as Partial<{
+    title: string;
+    description: string;
+    category: string;
+    subcategory: string;
+    price: number;
+    isNegotiable: boolean;
+    photos: string[];
+    district: string;
+    status: ListingStatus;
+  }>;
 
   const updated = await prisma.listing.update({
-    where: { id: req.params.id },
-    data: parsed.data,
+    where: { id },
+    data: body,
   });
 
   res.json(updated);
@@ -199,8 +196,9 @@ export async function deleteListing(
     return;
   }
 
+  const { id } = req.validatedParams as { id: string };
   const listing = await prisma.listing.findUnique({
-    where: { id: req.params.id },
+    where: { id },
   });
 
   if (!listing) {
@@ -217,7 +215,7 @@ export async function deleteListing(
   }
 
   await prisma.listing.update({
-    where: { id: req.params.id },
+    where: { id },
     data: { status: 'DELETED' },
   });
 
@@ -233,17 +231,11 @@ export async function premiumListing(
     return;
   }
 
-  const { days } = req.body;
-  const validDays = [3, 7, 30];
-  if (!validDays.includes(days)) {
-    res.status(400).json({
-      error: 'Gecersiz sure (3, 7 veya 30 gun)',
-    });
-    return;
-  }
+  const { days } = req.body as { days: 3 | 7 | 30 };
+  const { id } = req.validatedParams as { id: string };
 
   const listing = await prisma.listing.findUnique({
-    where: { id: req.params.id },
+    where: { id },
   });
 
   if (!listing || listing.sellerId !== req.user.userId) {
@@ -255,7 +247,7 @@ export async function premiumListing(
   expiresAt.setDate(expiresAt.getDate() + days);
 
   const updated = await prisma.listing.update({
-    where: { id: req.params.id },
+    where: { id },
     data: {
       isPremium: true,
       premiumExpiresAt: expiresAt,

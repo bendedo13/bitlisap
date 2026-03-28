@@ -5,6 +5,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { EmptyState } from '../../components/EmptyState';
+import { ListingListSkeleton } from '../../components/SkeletonList';
 import { router } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import { useInfiniteQuery } from '@tanstack/react-query';
@@ -173,23 +175,15 @@ export default function MarketScreen() {
       )}
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-          />
-        </View>
+        <ListingListSkeleton />
       ) : allListings.length === 0 ? (
-        <View className="flex-1 items-center justify-center">
-          <Ionicons
-            name="pricetag-outline"
-            size={48}
-            color="#ccc"
-          />
-          <Text className="text-gray-400 text-base mt-2">
-            Henüz ilan yok
-          </Text>
-        </View>
+        <EmptyState
+          icon="pricetag-outline"
+          title="Henüz ilan yok"
+          subtitle="İlk ilanı siz verin veya kategori seçerek tekrar deneyin."
+          actionLabel="İlan ver"
+          onAction={() => router.push('/listing/create')}
+        />
       ) : (
         <FlashList
           data={allListings}

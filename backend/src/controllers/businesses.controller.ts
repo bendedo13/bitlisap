@@ -1,39 +1,22 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
+import type { z } from 'zod';
+import {
+  businessesQuerySchema,
+  nearbyQuerySchema,
+} from '../validation/schemas';
 
 const prisma = new PrismaClient();
 
-const createBusinessSchema = z.object({
-  name: z.string().min(2).max(150),
-  category: z.string().max(50).optional(),
-  subcategory: z.string().max(50).optional(),
-  description: z.string().optional(),
-  address: z.string().optional(),
-  district: z.string().max(50).optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  phone: z.string().max(20).optional(),
-  whatsapp: z.string().max(20).optional(),
-  website: z.string().url().max(200).optional(),
-  instagram: z.string().max(100).optional(),
-  workingHours: z.record(z.string()).optional(),
-  photos: z.array(z.string().url()).max(10).optional(),
-});
-
-const reviewSchema = z.object({
-  rating: z.number().int().min(1).max(5),
-  comment: z.string().optional(),
-  photos: z.array(z.string().url()).max(5).optional(),
-});
+type BusinessesQuery = z.infer<typeof businessesQuerySchema>;
+type NearbyQuery = z.infer<typeof nearbyQuerySchema>;
 
 export async function getBusinesses(
   req: Request,
   res: Response
 ): Promise<void> {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = 20;
-  const { category, district } = req.query;
+  const { page, limit, category, district } =
+    req.validatedQuery as BusinessesQuery;
 
   const where: Record<string, unknown> = {
     isActive: true,
@@ -74,8 +57,9 @@ export async function getBusinessById(
   req: Request,
   res: Response
 ): Promise<void> {
+  const { id } = req.validatedParams as { id: string };
   const business = await prisma.business.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: {
       owner: {
         select: {
@@ -119,24 +103,43 @@ export async function createBusiness(
     return;
   }
 
-  const parsed = createBusinessSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as {
+    name: string;
+    category?: string;
+    subcategory?: string;
+    description?: string;
+    address?: string;
+    district?: string;
+    latitude?: number;
+    longitude?: number;
+    phone?: string;
+    whatsapp?: string;
+    website?: string;
+    instagram?: string;
+    workingHours?: Record<string, string>;
+    photos?: string[];
+  };
 
   const business = await prisma.business.create({
     data: {
-      ...parsed.data,
-      photos: parsed.data.photos ?? [],
+      name: body.name,
+      category: body.category,
+      subcategory: body.subcategory,
+      description: body.description,
+      address: body.address,
+      district: body.district,
+      latitude: body.latitude,
+      longitude: body.longitude,
+      phone: body.phone,
+      whatsapp: body.whatsapp,
+      website: body.website,
+      instagram: body.instagram,
+      workingHours: body.workingHours,
+      photos: body.photos ?? [],
       ownerId: req.user.userId,
     },
   });
 
-  // Kullanici tipini BUSINESS yap
   await prisma.user.update({
     where: { id: req.user.userId },
     data: { userType: 'BUSINESS' },
@@ -154,8 +157,9 @@ export async function updateBusiness(
     return;
   }
 
+  const { id } = req.validatedParams as { id: string };
   const business = await prisma.business.findUnique({
-    where: { id: req.params.id },
+    where: { id },
   });
 
   if (!business) {
@@ -173,20 +177,26 @@ export async function updateBusiness(
     return;
   }
 
-  const parsed = createBusinessSchema
-    .partial()
-    .safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as Partial<{
+    name: string;
+    category: string;
+    subcategory: string;
+    description: string;
+    address: string;
+    district: string;
+    latitude: number;
+    longitude: number;
+    phone: string;
+    whatsapp: string;
+    website: string;
+    instagram: string;
+    workingHours: Record<string, string>;
+    photos: string[];
+  }>;
 
   const updated = await prisma.business.update({
-    where: { id: req.params.id },
-    data: parsed.data,
+    where: { id },
+    data: body,
   });
 
   res.json(updated);
@@ -196,20 +206,8 @@ export async function getNearbyBusinesses(
   req: Request,
   res: Response
 ): Promise<void> {
-  const lat = parseFloat(req.query.lat as string);
-  const lng = parseFloat(req.query.lng as string);
-  const radius = parseFloat(
-    req.query.radius as string
-  ) || 5; // km
+  const { lat, lng, radius } = req.validatedQuery as NearbyQuery;
 
-  if (isNaN(lat) || isNaN(lng)) {
-    res.status(400).json({
-      error: 'lat ve lng parametreleri gerekli',
-    });
-    return;
-  }
-
-  // Haversine formulu ile yakin isletmeleri bul
   const businesses = await prisma.$queryRaw`
     SELECT *,
       (6371 * acos(
@@ -240,16 +238,15 @@ export async function addReview(
     return;
   }
 
-  const parsed = reviewSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
+  const body = req.body as {
+    rating: number;
+    comment?: string;
+    photos?: string[];
+  };
 
-  const businessId = req.params.id;
+  const { id: businessId } = req.validatedParams as {
+    id: string;
+  };
   const business = await prisma.business.findUnique({
     where: { id: businessId },
   });
@@ -266,31 +263,29 @@ export async function addReview(
       userId: req.user.userId,
       targetId: businessId,
       targetType: 'BUSINESS',
-      rating: parsed.data.rating,
-      comment: parsed.data.comment,
-      photos: parsed.data.photos ?? [],
+      rating: body.rating,
+      comment: body.comment,
+      photos: body.photos ?? [],
     },
   });
 
-  // Ortalama puani guncelle
   const avgResult = await prisma.review.aggregate({
     where: {
       targetId: businessId,
       targetType: 'BUSINESS',
     },
     _avg: { rating: true },
-    _count: true,
+    _count: { _all: true },
   });
 
   await prisma.business.update({
     where: { id: businessId },
     data: {
       rating: avgResult._avg.rating ?? 0,
-      reviewCount: avgResult._count,
+      reviewCount: avgResult._count._all,
     },
   });
 
-  // Puan ekle
   await prisma.pointTransaction.create({
     data: {
       userId: req.user.userId,

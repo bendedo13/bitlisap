@@ -1,0 +1,29 @@
+import winston from 'winston';
+import { config } from '../config';
+
+const { combine, timestamp, printf, colorize, errors } =
+  winston.format;
+
+const logFormat = printf(
+  ({ level, message, stack, timestamp: ts }) =>
+    `${ts} [${level}] ${stack ?? message}`
+);
+
+export const logger = winston.createLogger({
+  level: config.NODE_ENV === 'production' ? 'info' : 'debug',
+  format: combine(
+    errors({ stack: true }),
+    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+    logFormat
+  ),
+  transports: [
+    new winston.transports.Console({
+      format: combine(
+        colorize(),
+        errors({ stack: true }),
+        timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        logFormat
+      ),
+    }),
+  ],
+});

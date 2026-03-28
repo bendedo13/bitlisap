@@ -1,28 +1,14 @@
 import { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import { z } from 'zod';
 import { config } from '../config';
 
 const prisma = new PrismaClient();
 
-// OTP'leri gecici olarak bellekte tut (production'da Redis kullan)
 const otpStore = new Map<string, {
   code: string;
   expiresAt: number;
 }>();
-
-const sendOtpSchema = z.object({
-  phone: z.string()
-    .min(10)
-    .max(20)
-    .regex(/^\+?[0-9]+$/),
-});
-
-const verifyOtpSchema = z.object({
-  phone: z.string(),
-  code: z.string().length(6),
-});
 
 function generateOtp(): string {
   return Math.floor(100000 + Math.random() * 900000)
@@ -33,18 +19,25 @@ function generateToken(
   userId: string,
   userType: string
 ): string {
+  const signOpts: SignOptions = {
+    expiresIn: config.JWT_EXPIRES_IN as SignOptions['expiresIn'],
+  };
   return jwt.sign(
     { userId, userType },
     config.JWT_SECRET,
-    { expiresIn: config.JWT_EXPIRES_IN }
+    signOpts
   );
 }
 
 function generateRefreshToken(userId: string): string {
+  const refreshOpts: SignOptions = {
+    expiresIn:
+      config.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'],
+  };
   return jwt.sign(
     { userId, type: 'refresh' },
     config.JWT_SECRET,
-    { expiresIn: config.JWT_REFRESH_EXPIRES_IN }
+    refreshOpts
   );
 }
 
@@ -52,24 +45,14 @@ export async function sendOtp(
   req: Request,
   res: Response
 ): Promise<void> {
-  const parsed = sendOtpSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz telefon numarasi',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
-
-  const { phone } = parsed.data;
+  const { phone } = req.body as { phone: string };
   const code = generateOtp();
 
   otpStore.set(phone, {
     code,
-    expiresAt: Date.now() + 5 * 60 * 1000, // 5 dakika
+    expiresAt: Date.now() + 5 * 60 * 1000,
   });
 
-  // Twilio entegrasyonu (opsiyonel)
   if (
     config.TWILIO_ACCOUNT_SID &&
     config.TWILIO_AUTH_TOKEN
@@ -90,11 +73,10 @@ export async function sendOtp(
     }
   }
 
-  // Development modunda OTP'yi response'da dondur
   if (config.NODE_ENV === 'development') {
     res.json({
       message: 'OTP gonderildi',
-      code, // Sadece development
+      code,
     });
     return;
   }
@@ -106,16 +88,10 @@ export async function verifyOtp(
   req: Request,
   res: Response
 ): Promise<void> {
-  const parsed = verifyOtpSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({
-      error: 'Gecersiz veri',
-      details: parsed.error.flatten(),
-    });
-    return;
-  }
-
-  const { phone, code } = parsed.data;
+  const { phone, code } = req.body as {
+    phone: string;
+    code: string;
+  };
   const stored = otpStore.get(phone);
 
   if (!stored) {
@@ -136,7 +112,6 @@ export async function verifyOtp(
 
   otpStore.delete(phone);
 
-  // Kullaniciyi bul veya olustur
   let user = await prisma.user.findUnique({
     where: { phone },
   });
@@ -177,7 +152,9 @@ export async function refreshToken(
   req: Request,
   res: Response
 ): Promise<void> {
-  const { refreshToken: token } = req.body;
+  const { refreshToken: token } = req.body as {
+    refreshToken: string;
+  };
   if (!token) {
     res.status(400).json({ error: 'Refresh token gerekli' });
     return;

@@ -1,25 +1,51 @@
 import '../global.css';
-import { useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import {
-  QueryClient,
-  QueryClientProvider,
-} from '@tanstack/react-query';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import { colors } from '../constants/theme';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60 * 1000,
-      retry: 2,
-    },
-  },
-});
+function PushRegistration() {
+  usePushNotifications();
+  return null;
+}
 
 export default function RootLayout() {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60 * 1000,
+            gcTime: 1000 * 60 * 60 * 24,
+            retry: 1,
+            networkMode: 'offlineFirst',
+          },
+        },
+      })
+  );
+
+  const persister = useMemo(
+    () =>
+      createAsyncStoragePersister({
+        storage: AsyncStorage,
+      }),
+    []
+  );
+
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        maxAge: 1000 * 60 * 60 * 24,
+      }}
+    >
+      <PushRegistration />
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -40,6 +66,18 @@ export default function RootLayout() {
         <Stack.Screen
           name="(tabs)"
           options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="search"
+          options={{ title: 'Arama' }}
+        />
+        <Stack.Screen
+          name="legal/privacy"
+          options={{ title: 'Gizlilik' }}
+        />
+        <Stack.Screen
+          name="legal/terms"
+          options={{ title: 'Kullanım Şartları' }}
         />
         <Stack.Screen
           name="news/[id]"
@@ -82,6 +120,6 @@ export default function RootLayout() {
           options={{ title: 'Tarih & Turizm' }}
         />
       </Stack>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
