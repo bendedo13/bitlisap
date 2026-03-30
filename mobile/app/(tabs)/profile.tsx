@@ -149,7 +149,7 @@ export default function ProfileScreen() {
         <MenuSection title="İçeriklerim">
           <MenuItem icon="pricetag-outline" label="İlanlarım" sublabel="Verdiğim ilanlar" onPress={() => {}} />
           <MenuItem icon="heart-outline" label="Favori İlanlar" onPress={() => {}} />
-          <MenuItem icon="chatbubbles-outline" label="Mesajlarım" onPress={() => {}} />
+          <MenuItem icon="chatbubbles-outline" label="Mesajlarım" sublabel="Sohbetleriniz" onPress={() => router.push('/conversations' as any)} />
           <MenuItem icon="notifications-outline" label="Bildirimler" onPress={() => {}} />
         </MenuSection>
 
@@ -171,6 +171,7 @@ export default function ProfileScreen() {
           <MenuItem icon="calendar-outline" label="Etkinlikler" onPress={() => router.push('/events' as any)} />
           <MenuItem icon="alert-circle-outline" label="Acil Yardım" onPress={() => router.push('/emergency' as any)} color={Colors.danger[600]} />
           <MenuItem icon="compass-outline" label="Turizm & Tarih" onPress={() => router.push('/tourism' as any)} color={Colors.stone[600]} />
+          <MenuItem icon="megaphone-outline" label="Reklam Ver" sublabel="İşletmeni tanıt, müşteri kazan" onPress={() => router.push('/ads/create' as any)} color={Colors.sunset[500]} />
         </MenuSection>
 
         {/* Settings */}

@@ -119,6 +119,14 @@ export default function RootLayout() {
           name="tourism"
           options={{ title: 'Tarih & Turizm' }}
         />
+        <Stack.Screen
+          name="conversations"
+          options={{ title: 'Mesajlar' }}
+        />
+        <Stack.Screen
+          name="ads/create"
+          options={{ title: 'Reklam Ver' }}
+        />
       </Stack>
     </PersistQueryClientProvider>
   );

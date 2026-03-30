@@ -1,41 +1,15 @@
 import { Router } from 'express';
+import { register, login, refreshToken, getMe, updateProfile, logout } from '../controllers/auth.controller';
 import { authenticate } from '../middleware/auth';
-import {
-  otpSendLimiter,
-  authVerifyLimiter,
-} from '../middleware/rateLimit';
-import { validateBody } from '../middleware/validate';
-import {
-  sendOtpBodySchema,
-  verifyOtpBodySchema,
-  refreshTokenBodySchema,
-} from '../validation/schemas';
-import {
-  sendOtp,
-  verifyOtp,
-  refreshToken,
-  getMe,
-} from '../controllers/auth.controller';
+import { createRateLimit } from '../middleware/rateLimit';
 
 const router = Router();
 
-router.post(
-  '/send-otp',
-  otpSendLimiter,
-  validateBody(sendOtpBodySchema),
-  sendOtp
-);
-router.post(
-  '/verify-otp',
-  authVerifyLimiter,
-  validateBody(verifyOtpBodySchema),
-  verifyOtp
-);
-router.post(
-  '/refresh',
-  validateBody(refreshTokenBodySchema),
-  refreshToken
-);
+router.post('/register', createRateLimit(10, 15), register);
+router.post('/login', createRateLimit(10, 15), login);
+router.post('/refresh', refreshToken);
 router.get('/me', authenticate, getMe);
+router.put('/me', authenticate, updateProfile);
+router.post('/logout', authenticate, logout);
 
 export default router;

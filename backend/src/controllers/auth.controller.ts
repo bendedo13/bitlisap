@@ -1,227 +1,230 @@
 import { Request, Response } from 'express';
-import jwt, { SignOptions } from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import { config } from '../config';
 
 const prisma = new PrismaClient();
 
-const otpStore = new Map<string, {
-  code: string;
-  expiresAt: number;
-}>();
+// ─── Validation Schemas ───
+const registerSchema = z.object({
+  email: z.string().email('Geçerli bir e-posta adresi girin'),
+  password: z.string().min(6, 'Şifre en az 6 karakter olmalı'),
+  fullName: z.string().min(2, 'Ad soyad en az 2 karakter olmalı'),
+  phone: z.string().optional(),
+  age: z.number().int().min(13).max(120).optional(),
+  occupation: z.string().max(100).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']).optional(),
+  district: z.string().optional(),
+  bio: z.string().max(500).optional(),
+});
 
-function generateOtp(): string {
-  return Math.floor(100000 + Math.random() * 900000)
-    .toString();
-}
+const loginSchema = z.object({
+  email: z.string().email('Geçerli bir e-posta adresi girin'),
+  password: z.string().min(1, 'Şifre gerekli'),
+});
 
-function generateToken(
-  userId: string,
-  userType: string
-): string {
-  const signOpts: SignOptions = {
-    expiresIn: config.JWT_EXPIRES_IN as SignOptions['expiresIn'],
-  };
-  return jwt.sign(
+const updateProfileSchema = z.object({
+  fullName: z.string().min(2).optional(),
+  phone: z.string().optional(),
+  age: z.number().int().min(13).max(120).optional(),
+  occupation: z.string().max(100).optional(),
+  gender: z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']).optional(),
+  district: z.string().optional(),
+  bio: z.string().max(500).optional(),
+  avatarUrl: z.string().url().optional(),
+});
+
+function generateTokens(userId: string, userType: string) {
+  const token = jwt.sign(
     { userId, userType },
-    config.JWT_SECRET,
-    signOpts
+    config.jwtSecret,
+    { expiresIn: '7d' }
   );
-}
-
-function generateRefreshToken(userId: string): string {
-  const refreshOpts: SignOptions = {
-    expiresIn:
-      config.JWT_REFRESH_EXPIRES_IN as SignOptions['expiresIn'],
-  };
-  return jwt.sign(
+  const refreshToken = jwt.sign(
     { userId, type: 'refresh' },
-    config.JWT_SECRET,
-    refreshOpts
+    config.jwtSecret,
+    { expiresIn: '30d' }
   );
+  return { token, refreshToken };
 }
 
-export async function sendOtp(
-  req: Request,
-  res: Response
-): Promise<void> {
-  const { phone } = req.body as { phone: string };
-  const code = generateOtp();
+function sanitizeUser(user: any) {
+  const { passwordHash, ...safe } = user;
+  return safe;
+}
 
-  otpStore.set(phone, {
-    code,
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
+// ─── Register ───
+export async function register(req: Request, res: Response) {
+  try {
+    const data = registerSchema.parse(req.body);
 
-  if (
-    config.TWILIO_ACCOUNT_SID &&
-    config.TWILIO_AUTH_TOKEN
-  ) {
-    try {
-      const twilio = require('twilio');
-      const client = twilio(
-        config.TWILIO_ACCOUNT_SID,
-        config.TWILIO_AUTH_TOKEN
-      );
-      await client.messages.create({
-        body: `Bitlis Sehrim dogrulama kodu: ${code}`,
-        from: config.TWILIO_PHONE_NUMBER,
-        to: phone,
-      });
-    } catch (err) {
-      console.error('SMS gonderilemedi:', err);
+    const existing = await prisma.user.findUnique({ where: { email: data.email } });
+    if (existing) {
+      return res.status(409).json({ message: 'Bu e-posta adresi zaten kayıtlı' });
     }
-  }
 
-  if (config.NODE_ENV === 'development') {
-    res.json({
-      message: 'OTP gonderildi',
-      code,
-    });
-    return;
-  }
+    const passwordHash = await bcrypt.hash(data.password, 12);
 
-  res.json({ message: 'OTP gonderildi' });
-}
-
-export async function verifyOtp(
-  req: Request,
-  res: Response
-): Promise<void> {
-  const { phone, code } = req.body as {
-    phone: string;
-    code: string;
-  };
-  const stored = otpStore.get(phone);
-
-  if (!stored) {
-    res.status(400).json({ error: 'OTP bulunamadi' });
-    return;
-  }
-
-  if (Date.now() > stored.expiresAt) {
-    otpStore.delete(phone);
-    res.status(400).json({ error: 'OTP suresi doldu' });
-    return;
-  }
-
-  if (stored.code !== code) {
-    res.status(400).json({ error: 'Yanlis OTP kodu' });
-    return;
-  }
-
-  otpStore.delete(phone);
-
-  let user = await prisma.user.findUnique({
-    where: { phone },
-  });
-
-  if (!user) {
-    user = await prisma.user.create({
+    const user = await prisma.user.create({
       data: {
-        phone,
-        isVerified: true,
+        email: data.email,
+        passwordHash,
+        fullName: data.fullName,
+        phone: data.phone,
+        age: data.age,
+        occupation: data.occupation,
+        gender: data.gender,
+        district: data.district,
+        bio: data.bio,
       },
     });
-  } else {
+
+    // Welcome points
+    await prisma.pointTransaction.create({
+      data: {
+        userId: user.id,
+        points: 50,
+        reason: 'WELCOME',
+        description: 'Hoş geldin bonusu! Bitlis Şehrim\'e katıldın.',
+      },
+    });
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastSeen: new Date() },
+      data: { cityPoints: { increment: 50 } },
     });
+
+    const tokens = generateTokens(user.id, user.userType);
+
+    res.status(201).json({
+      message: 'Hesap başarıyla oluşturuldu',
+      user: sanitizeUser(user),
+      ...tokens,
+    });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: error.errors[0].message, errors: error.errors });
+    }
+    console.error('Register error:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
   }
-
-  const token = generateToken(user.id, user.userType);
-  const refreshToken = generateRefreshToken(user.id);
-
-  res.json({
-    token,
-    refreshToken,
-    user: {
-      id: user.id,
-      phone: user.phone,
-      fullName: user.fullName,
-      avatarUrl: user.avatarUrl,
-      district: user.district,
-      userType: user.userType,
-      cityPoints: user.cityPoints,
-    },
-  });
 }
 
-export async function refreshToken(
-  req: Request,
-  res: Response
-): Promise<void> {
-  const { refreshToken: token } = req.body as {
-    refreshToken: string;
-  };
-  if (!token) {
-    res.status(400).json({ error: 'Refresh token gerekli' });
-    return;
-  }
-
+// ─── Login ───
+export async function login(req: Request, res: Response) {
   try {
-    const payload = jwt.verify(
-      token,
-      config.JWT_SECRET
-    ) as { userId: string; type: string };
+    const data = loginSchema.parse(req.body);
 
-    if (payload.type !== 'refresh') {
-      res.status(401).json({ error: 'Gecersiz token tipi' });
-      return;
+    const user = await prisma.user.findUnique({ where: { email: data.email } });
+    if (!user) {
+      return res.status(401).json({ message: 'E-posta veya şifre hatalı' });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+    if (!user.isActive) {
+      return res.status(403).json({ message: 'Hesabınız devre dışı bırakılmış' });
+    }
+
+    const valid = await bcrypt.compare(data.password, user.passwordHash);
+    if (!valid) {
+      return res.status(401).json({ message: 'E-posta veya şifre hatalı' });
+    }
+
+    // Update online status
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { isOnline: true, lastSeen: new Date() },
     });
 
-    if (!user) {
-      res.status(401).json({ error: 'Kullanici bulunamadi' });
-      return;
-    }
-
-    const newToken = generateToken(user.id, user.userType);
-    const newRefreshToken = generateRefreshToken(user.id);
+    const tokens = generateTokens(user.id, user.userType);
 
     res.json({
-      token: newToken,
-      refreshToken: newRefreshToken,
+      message: 'Giriş başarılı',
+      user: sanitizeUser(user),
+      ...tokens,
     });
-  } catch {
-    res.status(401).json({ error: 'Gecersiz refresh token' });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: error.errors[0].message });
+    }
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Sunucu hatası' });
   }
 }
 
-export async function getMe(
-  req: Request,
-  res: Response
-): Promise<void> {
-  if (!req.user) {
-    res.status(401).json({ error: 'Yetkisiz' });
-    return;
+// ─── Update Profile ───
+export async function updateProfile(req: Request, res: Response) {
+  try {
+    const userId = (req as any).auth.userId;
+    const data = updateProfileSchema.parse(req.body);
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    res.json({ user: sanitizeUser(user) });
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ message: error.errors[0].message });
+    }
+    res.status(500).json({ message: 'Sunucu hatası' });
   }
+}
 
-  const user = await prisma.user.findUnique({
-    where: { id: req.user.userId },
-    select: {
-      id: true,
-      phone: true,
-      fullName: true,
-      email: true,
-      avatarUrl: true,
-      neighborhood: true,
-      district: true,
-      userType: true,
-      isVerified: true,
-      cityPoints: true,
-      createdAt: true,
-    },
-  });
+// ─── Refresh Token ───
+export async function refreshToken(req: Request, res: Response) {
+  try {
+    const { refreshToken: token } = req.body;
+    if (!token) return res.status(400).json({ message: 'Refresh token gerekli' });
 
-  if (!user) {
-    res.status(404).json({ error: 'Kullanici bulunamadi' });
-    return;
+    const decoded = jwt.verify(token, config.jwtSecret) as any;
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ message: 'Geçersiz token' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: 'Kullanıcı bulunamadı' });
+    }
+
+    const tokens = generateTokens(user.id, user.userType);
+    res.json(tokens);
+  } catch {
+    res.status(401).json({ message: 'Geçersiz veya süresi dolmuş token' });
   }
+}
 
-  res.json(user);
+// ─── Get Me ───
+export async function getMe(req: Request, res: Response) {
+  try {
+    const userId = (req as any).auth.userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        _count: {
+          select: { listings: true, reviews: true, sentMessages: true },
+        },
+      },
+    });
+    if (!user) return res.status(404).json({ message: 'Kullanıcı bulunamadı' });
+
+    res.json({ user: sanitizeUser(user) });
+  } catch {
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
+}
+
+// ─── Logout (set offline) ───
+export async function logout(req: Request, res: Response) {
+  try {
+    const userId = (req as any).auth.userId;
+    await prisma.user.update({
+      where: { id: userId },
+      data: { isOnline: false, lastSeen: new Date() },
+    });
+    res.json({ message: 'Çıkış yapıldı' });
+  } catch {
+    res.status(500).json({ message: 'Sunucu hatası' });
+  }
 }

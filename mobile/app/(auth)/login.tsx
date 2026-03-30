@@ -9,266 +9,232 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { authService } from '../../services/authService';
+import api from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
-import PrimaryButton from '../../components/ui/PrimaryButton';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { setAuth } = useAuthStore();
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const sendOtp = async () => {
-    if (phone.length < 10) { setError('Geçerli bir telefon numarası girin'); return; }
+  const handleLogin = async () => {
+    if (!email || !password) { setError('E-posta ve şifre gerekli'); return; }
     setError('');
     setLoading(true);
     try {
-      await authService.sendOtp(phone);
-      setStep('otp');
-    } catch {
-      setError('Kod gönderilemedi. Lütfen tekrar deneyin.');
-    } finally { setLoading(false); }
-  };
-
-  const verifyOtp = async () => {
-    if (otp.length !== 6) { setError('6 haneli kodu girin'); return; }
-    setError('');
-    setLoading(true);
-    try {
-      const data = await authService.verifyOtp(phone, otp);
-      setAuth(data.user, data.token, data.refreshToken);
-      if (data.isNewUser) {
-        router.replace('/(auth)/register' as any);
-      } else {
-        router.replace('/(tabs)' as any);
-      }
-    } catch {
-      setError('Hatalı kod. Lütfen tekrar deneyin.');
-    } finally { setLoading(false); }
+      const res = await api.post('/auth/login', { email, password });
+      setAuth(res.data.user, res.data.token, res.data.refreshToken);
+      router.replace('/(tabs)' as any);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || 'Giriş başarısız');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary[800]} />
 
       {/* Hero */}
       <View style={styles.hero}>
         <View style={styles.heroCircle1} />
         <View style={styles.heroCircle2} />
-        <View style={styles.heroCircle3} />
-        <View style={styles.heroContent}>
-          <View style={styles.logoWrap}>
-            <Ionicons name="location" size={32} color={Colors.white} />
-          </View>
-          <Text style={styles.heroTitle}>Bitlis Şehrim</Text>
-          <Text style={styles.heroSub}>Şehrin dijital kalbi</Text>
+        <View style={styles.heroIcon}>
+          <Ionicons name="location" size={36} color={Colors.white} />
         </View>
+        <Text style={styles.heroTitle}>Bitlis Şehrim</Text>
+        <Text style={styles.heroSub}>Hesabınıza giriş yapın</Text>
       </View>
 
-      <KeyboardAvoidingView
-        style={styles.kav}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <ScrollView
+        style={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        <ScrollView contentContainerStyle={styles.formContainer} showsVerticalScrollIndicator={false}>
-          {/* Card */}
-          <View style={styles.card}>
-            {/* Step indicator */}
-            <View style={styles.stepRow}>
-              <View style={styles.stepItem}>
-                <View style={[styles.stepCircle, { backgroundColor: Colors.primary[600] }]}>
-                  <Text style={styles.stepNum}>1</Text>
-                </View>
-                <Text style={[styles.stepLabel, { color: Colors.primary[600] }]}>Telefon</Text>
-              </View>
-              <View style={[styles.stepLine, step === 'otp' && { backgroundColor: Colors.primary[600] }]} />
-              <View style={styles.stepItem}>
-                <View style={[styles.stepCircle, step === 'otp' ? { backgroundColor: Colors.primary[600] } : { backgroundColor: Colors.gray[200] }]}>
-                  <Text style={[styles.stepNum, step !== 'otp' && { color: Colors.gray[500] }]}>2</Text>
-                </View>
-                <Text style={[styles.stepLabel, step === 'otp' ? { color: Colors.primary[600] } : { color: Colors.gray[400] }]}>Doğrulama</Text>
-              </View>
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIcon}>
+              <Ionicons name="log-in-outline" size={24} color={Colors.primary[600]} />
             </View>
+            <View>
+              <Text style={styles.cardTitle}>Giriş Yap</Text>
+              <Text style={styles.cardSub}>E-posta ve şifrenizle giriş yapın</Text>
+            </View>
+          </View>
 
-            {step === 'phone' ? (
-              <>
-                <Text style={styles.formTitle}>Telefon Numarası</Text>
-                <Text style={styles.formSub}>Sizi doğrulamak için SMS kodu göndereceğiz</Text>
-                <View style={styles.inputWrap}>
-                  <View style={styles.inputPrefix}>
-                    <Text style={styles.inputPrefixText}>🇹🇷 +90</Text>
-                  </View>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="5XX XXX XX XX"
-                    placeholderTextColor={Colors.gray[300]}
-                    keyboardType="phone-pad"
-                    value={phone}
-                    onChangeText={(t) => setPhone(t.replace(/\D/g, ''))}
-                    maxLength={11}
-                  />
-                </View>
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                <PrimaryButton
-                  label="Devam Et"
-                  onPress={sendOtp}
-                  loading={loading}
-                  size="lg"
-                  style={{ marginTop: Spacing.md }}
-                  rightIcon={<Ionicons name="arrow-forward" size={18} color={Colors.white} />}
-                />
-              </>
+          {/* Email */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>E-posta</Text>
+            <View style={styles.inputRow}>
+              <Ionicons name="mail-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
+              <TextInput
+                style={styles.input}
+                placeholder="ornek@email.com"
+                placeholderTextColor={Colors.gray[400]}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={email}
+                onChangeText={setEmail}
+                autoFocus
+              />
+            </View>
+          </View>
+
+          {/* Password */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Şifre</Text>
+            <View style={styles.inputRow}>
+              <Ionicons name="lock-closed-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••"
+                placeholderTextColor={Colors.gray[400]}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ paddingRight: 14 }}>
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.gray[400]} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+
+          <TouchableOpacity
+            style={[styles.btn, { opacity: loading ? 0.7 : 1 }]}
+            onPress={handleLogin}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color={Colors.white} />
             ) : (
               <>
-                <Text style={styles.formTitle}>Doğrulama Kodu</Text>
-                <Text style={styles.formSub}>
-                  <Text style={{ color: Colors.primary[600] }}>{phone}</Text> numarasına gönderilen 6 haneli kodu girin
-                </Text>
-                <TextInput
-                  style={styles.otpInput}
-                  placeholder="• • • • • •"
-                  placeholderTextColor={Colors.gray[300]}
-                  keyboardType="number-pad"
-                  value={otp}
-                  onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))}
-                  maxLength={6}
-                  textAlign="center"
-                />
-                {error ? <Text style={styles.errorText}>{error}</Text> : null}
-                <PrimaryButton
-                  label="Giriş Yap"
-                  onPress={verifyOtp}
-                  loading={loading}
-                  size="lg"
-                  style={{ marginTop: Spacing.md }}
-                />
-                <TouchableOpacity style={styles.resendBtn} onPress={() => setStep('phone')}>
-                  <Ionicons name="arrow-back" size={14} color={Colors.primary[500]} />
-                  <Text style={styles.resendText}>Numarayı değiştir</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.resendBtn} onPress={sendOtp}>
-                  <Ionicons name="refresh" size={14} color={Colors.textMuted} />
-                  <Text style={[styles.resendText, { color: Colors.textMuted }]}>Kodu tekrar gönder</Text>
-                </TouchableOpacity>
+                <Text style={styles.btnText}>Giriş Yap</Text>
+                <Ionicons name="arrow-forward" size={18} color={Colors.white} />
               </>
             )}
+          </TouchableOpacity>
+
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>veya</Text>
+            <View style={styles.dividerLine} />
           </View>
 
-          {/* Features */}
-          <View style={styles.features}>
-            {[
-              { icon: 'shield-checkmark' as const, text: 'Güvenli SMS doğrulama' },
-              { icon: 'flash' as const, text: 'Hızlı giriş, şifre yok' },
-              { icon: 'people' as const, text: '10.000+ Bitlisli kullanıcı' },
-            ].map((f) => (
-              <View key={f.text} style={styles.featureItem}>
-                <Ionicons name={f.icon} size={16} color={Colors.primary[400]} />
-                <Text style={styles.featureText}>{f.text}</Text>
-              </View>
-            ))}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
+          <TouchableOpacity
+            style={styles.registerBtn}
+            onPress={() => router.push('/(auth)/register' as any)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-add-outline" size={18} color={Colors.primary[600]} />
+            <Text style={styles.registerBtnText}>Hesap Oluştur</Text>
+          </TouchableOpacity>
+
+          <Text style={styles.termsText}>
+            Giriş yaparak{' '}
+            <Text style={{ color: Colors.primary[600] }}>Kullanım Koşulları</Text>'nı kabul etmiş olursunuz
+          </Text>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
-  kav: { flex: 1 },
-
   hero: {
     backgroundColor: Colors.primary[800],
-    paddingTop: (StatusBar.currentHeight || 44) + 20,
-    paddingBottom: Spacing.xxxl,
+    paddingTop: (StatusBar.currentHeight || 44) + 16,
+    paddingBottom: Spacing.xxl,
     alignItems: 'center',
     overflow: 'hidden',
   },
   heroCircle1: {
-    position: 'absolute', width: 250, height: 250, borderRadius: 125,
-    backgroundColor: Colors.primary[600], opacity: 0.25, top: -80, right: -60,
+    position: 'absolute', width: 200, height: 200, borderRadius: 100,
+    backgroundColor: Colors.primary[600], opacity: 0.3, top: -60, right: -40,
   },
   heroCircle2: {
-    position: 'absolute', width: 150, height: 150, borderRadius: 75,
-    backgroundColor: Colors.gold[400], opacity: 0.08, bottom: -30, left: -20,
+    position: 'absolute', width: 120, height: 120, borderRadius: 60,
+    backgroundColor: Colors.gold[400], opacity: 0.1, bottom: 10, left: -20,
   },
-  heroCircle3: {
-    position: 'absolute', width: 80, height: 80, borderRadius: 40,
-    backgroundColor: Colors.primary[400], opacity: 0.15, top: 20, left: '30%',
-  },
-  heroContent: { alignItems: 'center', zIndex: 1 },
-  logoWrap: {
+  heroIcon: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)',
     marginBottom: Spacing.md,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
   },
   heroTitle: { ...Typography.h1, color: Colors.white, marginBottom: 6 },
   heroSub: { ...Typography.body, color: 'rgba(255,255,255,0.6)' },
 
-  formContainer: { padding: Spacing.lg, paddingTop: Spacing.xl },
+  scroll: { flex: 1 },
+  scrollContent: { padding: Spacing.lg },
 
   card: {
-    backgroundColor: Colors.white,
-    borderRadius: BorderRadius.xxl,
-    padding: Spacing.xl,
-    ...Shadows.xl,
+    backgroundColor: Colors.white, borderRadius: BorderRadius.xxl,
+    padding: Spacing.xl, ...Shadows.xl,
   },
-
-  stepRow: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.xl },
-  stepItem: { alignItems: 'center', gap: 4 },
-  stepCircle: {
-    width: 32, height: 32, borderRadius: 16,
+  cardHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    marginBottom: Spacing.xl,
+  },
+  cardIcon: {
+    width: 52, height: 52, borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.primary[50],
     alignItems: 'center', justifyContent: 'center',
   },
-  stepNum: { ...Typography.label, color: Colors.white },
-  stepLabel: { ...Typography.caption, fontWeight: '600' },
-  stepLine: {
-    flex: 1, height: 2, backgroundColor: Colors.gray[200],
-    marginHorizontal: Spacing.sm, marginBottom: 18,
-  },
+  cardTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 2 },
+  cardSub: { ...Typography.caption, color: Colors.textMuted },
 
-  formTitle: { ...Typography.h3, color: Colors.textPrimary, marginBottom: 6 },
-  formSub: { ...Typography.body, color: Colors.textMuted, marginBottom: Spacing.lg, lineHeight: 22 },
-
-  inputWrap: {
+  inputGroup: { marginBottom: Spacing.md },
+  inputLabel: { ...Typography.label, color: Colors.textSecondary, marginBottom: 6, textTransform: 'uppercase' },
+  inputRow: {
     flexDirection: 'row', alignItems: 'center',
     borderWidth: 1.5, borderColor: Colors.border,
     borderRadius: BorderRadius.lg, overflow: 'hidden',
   },
-  inputPrefix: {
-    paddingHorizontal: 12, paddingVertical: 14,
-    backgroundColor: Colors.gray[50], borderRightWidth: 1, borderRightColor: Colors.border,
-  },
-  inputPrefixText: { ...Typography.body, color: Colors.textPrimary },
   input: {
-    flex: 1, paddingHorizontal: 14, paddingVertical: 14,
-    ...Typography.bodyLg, color: Colors.textPrimary,
+    flex: 1, ...Typography.bodyLg, color: Colors.textPrimary,
+    paddingHorizontal: 12, paddingVertical: 14,
   },
 
-  otpInput: {
-    borderWidth: 1.5, borderColor: Colors.border, borderRadius: BorderRadius.lg,
-    paddingVertical: 18, ...Typography.display, color: Colors.textPrimary,
-    letterSpacing: 12,
+  error: { ...Typography.bodySm, color: Colors.danger[600], marginBottom: Spacing.md },
+
+  btn: {
+    backgroundColor: Colors.primary[600],
+    borderRadius: BorderRadius.lg, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    ...Shadows.md, marginTop: Spacing.sm,
   },
+  btnText: { ...Typography.btnLg, color: Colors.white },
 
-  errorText: { ...Typography.bodySm, color: Colors.danger[600], marginTop: 8, textAlign: 'center' },
-
-  resendBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 8, marginTop: 4,
+  divider: {
+    flexDirection: 'row', alignItems: 'center',
+    marginVertical: Spacing.lg,
   },
-  resendText: { ...Typography.bodySm, color: Colors.primary[500] },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { ...Typography.label, color: Colors.textMuted, marginHorizontal: 12 },
 
-  features: { marginTop: Spacing.xl, gap: Spacing.md },
-  featureItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  featureText: { ...Typography.body, color: Colors.textSecondary },
+  registerBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    borderWidth: 1.5, borderColor: Colors.primary[300],
+    borderRadius: BorderRadius.lg, paddingVertical: 14,
+    backgroundColor: Colors.primary[50],
+  },
+  registerBtnText: { ...Typography.btn, color: Colors.primary[600] },
+
+  termsText: { ...Typography.caption, color: Colors.textMuted, textAlign: 'center', marginTop: Spacing.md },
 });

@@ -26,6 +26,8 @@ import notificationsRoutes
   from './routes/notifications.routes';
 import searchRoutes from './routes/search.routes';
 import legalRoutes from './routes/legal.routes';
+import adsRoutes from './routes/ads.routes';
+import partnershipsRoutes from './routes/partnerships.routes';
 
 const app = express();
 const httpServer = createServer(app);
@@ -72,6 +74,8 @@ app.use('/api/emergency', emergencyRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/legal', legalRoutes);
+app.use('/api/ads', adsRoutes);
+app.use('/api/partnerships', partnershipsRoutes);
 
 app.use(notFoundHandler);
 app.use(handleUploadError);
