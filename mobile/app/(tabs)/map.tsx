@@ -1,221 +1,300 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
+  StyleSheet,
+  StatusBar,
   TextInput,
+  Linking,
   ActivityIndicator,
 } from 'react-native';
-import { router } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
-import { colors } from '../../constants/theme';
-import { businessService } from '../../services/business.service';
-import { BUSINESS_CATEGORIES } from '../../constants/districts';
+import { FlashList } from '@shopify/flash-list';
+import { businessService } from '../../services/businessService';
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
+import Badge from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
 
-// Bitlis merkez koordinatlari
-const BITLIS_CENTER = {
-  latitude: 38.4003,
-  longitude: 42.1097,
+const CATEGORIES = [
+  { key: '', label: 'Tümü', icon: 'apps-outline' as const },
+  { key: 'RESTAURANT', label: 'Restoran', icon: 'restaurant-outline' as const },
+  { key: 'CAFE', label: 'Kafe', icon: 'cafe-outline' as const },
+  { key: 'MARKET', label: 'Market', icon: 'cart-outline' as const },
+  { key: 'HEALTH', label: 'Sağlık', icon: 'medical-outline' as const },
+  { key: 'HOTEL', label: 'Otel', icon: 'bed-outline' as const },
+  { key: 'TOURISM', label: 'Turizm', icon: 'compass-outline' as const },
+];
+
+const CAT_COLORS: Record<string, { bg: string; text: string }> = {
+  RESTAURANT: { bg: Colors.danger[100], text: Colors.danger[600] },
+  CAFE: { bg: Colors.stone[50], text: Colors.stone[600] },
+  MARKET: { bg: Colors.forest[100], text: Colors.forest[600] },
+  HEALTH: { bg: Colors.primary[50], text: Colors.primary[600] },
+  HOTEL: { bg: Colors.purple[100], text: Colors.purple[600] },
+  TOURISM: { bg: Colors.stone[50], text: Colors.stone[700] },
+  default: { bg: Colors.gray[100], text: Colors.gray[600] },
 };
 
-interface Business {
-  id: string;
-  name: string;
-  category: string | null;
-  district: string | null;
-  rating: number;
-  phone: string | null;
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <View style={{ flexDirection: 'row', gap: 1 }}>
+      {[1, 2, 3, 4, 5].map((s) => (
+        <Ionicons key={s} name={s <= Math.round(rating) ? 'star' : 'star-outline'} size={12} color={Colors.gold[400]} />
+      ))}
+    </View>
+  );
+}
+
+function BusinessCard({ item, onPress }: { item: any; onPress: () => void }) {
+  const catColor = CAT_COLORS[item.category] || CAT_COLORS.default;
+  return (
+    <TouchableOpacity style={styles.businessCard} onPress={onPress} activeOpacity={0.88}>
+      <View style={[styles.bizThumb, { backgroundColor: catColor.bg }]}>
+        <Ionicons name="storefront-outline" size={24} color={catColor.text} />
+      </View>
+      <View style={styles.bizBody}>
+        <Text style={styles.bizName} numberOfLines={1}>{item.name}</Text>
+        <Badge label={item.category || 'İşletme'} color={catColor.bg} textColor={catColor.text} size="sm" />
+        <View style={styles.bizMeta}>
+          <Ionicons name="location-outline" size={11} color={Colors.textMuted} />
+          <Text style={styles.bizMetaText}>{item.district || 'Bitlis'}</Text>
+          {item.averageRating > 0 && (
+            <>
+              <View style={styles.dot} />
+              <StarRating rating={item.averageRating} />
+              <Text style={styles.bizRatingText}>({item.reviewCount || 0})</Text>
+            </>
+          )}
+        </View>
+      </View>
+      {item.phone && (
+        <TouchableOpacity
+          style={styles.callBadge}
+          onPress={(e) => { e.stopPropagation(); Linking.openURL(`tel:${item.phone}`); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="call-outline" size={16} color={Colors.forest[500]} />
+        </TouchableOpacity>
+      )}
+    </TouchableOpacity>
+  );
 }
 
 export default function MapScreen() {
-  const [selectedCategory, setSelectedCategory] =
-    useState<string | undefined>();
+  const router = useRouter();
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('');
+  const [view, setView] = useState<'list' | 'map'>('list');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['businesses', selectedCategory],
-    queryFn: () =>
-      businessService.getAll({
-        category: selectedCategory,
-      }),
+    queryKey: ['businesses', category],
+    queryFn: () => businessService.getAll({ category: category || undefined }),
   });
 
-  const businesses: Business[] =
-    data?.data?.data ?? [];
-
+  const allBusinesses: any[] = (data as any)?.businesses ?? [];
   const filtered = search
-    ? businesses.filter((b) =>
-        b.name.toLowerCase().includes(
-          search.toLowerCase()
-        )
+    ? allBusinesses.filter((b) =>
+        b.name.toLowerCase().includes(search.toLowerCase()) ||
+        b.district?.toLowerCase().includes(search.toLowerCase())
       )
-    : businesses;
+    : allBusinesses;
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* Search */}
-      <View className="px-4 pt-3">
-        <View className="flex-row items-center bg-white rounded-xl px-4 py-3 mb-3">
-          <Ionicons
-            name="search"
-            size={20}
-            color="#999"
-          />
+    <View style={styles.root}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.stone[700]} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerCircle} />
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>Bitlis Haritası</Text>
+            <Text style={styles.headerSub}>{allBusinesses.length} işletme kayıtlı</Text>
+          </View>
+          <View style={styles.viewToggle}>
+            <TouchableOpacity
+              style={[styles.toggleBtn, view === 'list' && styles.toggleBtnActive]}
+              onPress={() => setView('list')}
+            >
+              <Ionicons name="list" size={16} color={view === 'list' ? Colors.white : 'rgba(255,255,255,0.6)'} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleBtn, view === 'map' && styles.toggleBtnActive]}
+              onPress={() => setView('map')}
+            >
+              <Ionicons name="map" size={16} color={view === 'map' ? Colors.white : 'rgba(255,255,255,0.6)'} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        {/* Search */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={16} color={Colors.gray[400]} />
           <TextInput
-            className="flex-1 ml-2 text-base"
-            placeholder="İşletme ara..."
+            style={styles.searchInput}
+            placeholder="İşletme veya yer ara..."
+            placeholderTextColor={Colors.gray[400]}
             value={search}
             onChangeText={setSearch}
-            accessibilityLabel="İşletme ara"
           />
-        </View>
-      </View>
-
-      {/* Category filters */}
-      <View className="px-4 mb-3">
-        <View className="flex-row flex-wrap gap-2">
-          <TouchableOpacity
-            onPress={() =>
-              setSelectedCategory(undefined)
-            }
-            style={{
-              backgroundColor: !selectedCategory
-                ? colors.primary
-                : '#F2F2F7',
-              borderRadius: 20,
-              paddingHorizontal: 12,
-              paddingVertical: 6,
-            }}
-            accessibilityLabel="Tüm kategoriler"
-          >
-            <Text
-              style={{
-                color: !selectedCategory
-                  ? '#fff'
-                  : '#666',
-                fontSize: 12,
-              }}
-            >
-              Tümü
-            </Text>
-          </TouchableOpacity>
-          {BUSINESS_CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat.key}
-              onPress={() =>
-                setSelectedCategory(cat.key)
-              }
-              style={{
-                backgroundColor:
-                  selectedCategory === cat.key
-                    ? colors.primary
-                    : '#F2F2F7',
-                borderRadius: 20,
-                paddingHorizontal: 12,
-                paddingVertical: 6,
-              }}
-              accessibilityLabel={cat.label}
-            >
-              <Text
-                style={{
-                  color:
-                    selectedCategory === cat.key
-                      ? '#fff'
-                      : '#666',
-                  fontSize: 12,
-                }}
-              >
-                {cat.label}
-              </Text>
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')}>
+              <Ionicons name="close-circle" size={16} color={Colors.gray[400]} />
             </TouchableOpacity>
-          ))}
+          )}
         </View>
       </View>
 
-      {/* Map placeholder */}
-      <View
-        style={{ backgroundColor: '#E8F4F8' }}
-        className="mx-4 rounded-2xl h-48 items-center justify-center mb-4"
-      >
-        <Ionicons
-          name="map"
-          size={48}
-          color={colors.primaryLight}
+      {/* Category Chips */}
+      <View style={styles.categoryWrap}>
+        <FlashList
+          data={CATEGORIES}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          estimatedItemSize={80}
+          contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm }}
+          renderItem={({ item: cat }) => {
+            const active = category === cat.key;
+            return (
+              <TouchableOpacity
+                style={[styles.chip, active && { backgroundColor: Colors.stone[600] }]}
+                onPress={() => setCategory(cat.key)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={cat.icon} size={13} color={active ? Colors.white : Colors.textMuted} />
+                <Text style={[styles.chipText, { color: active ? Colors.white : Colors.textSecondary }]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+          keyExtractor={(c) => c.key}
         />
-        <Text className="text-gray-400 mt-2">
-          Harita (react-native-maps)
-        </Text>
-        <Text className="text-gray-400 text-xs">
-          {BITLIS_CENTER.latitude}°N,{' '}
-          {BITLIS_CENTER.longitude}°E
-        </Text>
       </View>
 
-      {/* Business list */}
-      {isLoading ? (
-        <ActivityIndicator
-          className="mt-4"
-          color={colors.primary}
+      {view === 'map' ? (
+        /* Map Placeholder */
+        <View style={styles.mapPlaceholder}>
+          <View style={styles.mapIcon}>
+            <Ionicons name="map" size={56} color={Colors.stone[400]} />
+          </View>
+          <Text style={styles.mapTitle}>Harita Görünümü</Text>
+          <Text style={styles.mapSub}>
+            Bitlis Merkezi{'\n'}38.4003°K, 42.1097°D
+          </Text>
+          <Badge label="Yakında Aktif" color={Colors.stone[50]} textColor={Colors.stone[600]} size="md" />
+        </View>
+      ) : isLoading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={Colors.stone[600]} size="large" />
+        </View>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon="storefront-outline"
+          title="İşletme bulunamadı"
+          description="Arama kriterlerinizi değiştirin."
+          iconColor={Colors.stone[400]}
         />
       ) : (
-        <View className="px-4 flex-1">
-          <Text className="text-lg font-bold mb-3">
-            İşletmeler ({filtered.length})
-          </Text>
-          {filtered.map((biz) => (
-            <TouchableOpacity
-              key={biz.id}
-              className="bg-white rounded-xl p-4 mb-3"
-              style={{
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 1 },
-                shadowOpacity: 0.05,
-                shadowRadius: 3,
-                elevation: 1,
-              }}
-              onPress={() =>
-                router.push(`/business/${biz.id}`)
-              }
-            >
-              <Text className="text-base font-semibold">
-                {biz.name}
+        <FlashList
+          data={filtered}
+          estimatedItemSize={90}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 100, paddingTop: 4 }}
+          renderItem={({ item }) => (
+            <BusinessCard item={item} onPress={() => router.push(`/business/${item.id}` as any)} />
+          )}
+          keyExtractor={(item: any) => item.id}
+          ListHeaderComponent={
+            <View style={styles.resultHeader}>
+              <Text style={styles.resultText}>
+                <Text style={{ color: Colors.stone[600], fontWeight: '700' }}>{filtered.length}</Text> işletme bulundu
               </Text>
-              <View className="flex-row items-center mt-1">
-                {biz.category && (
-                  <Text className="text-gray-400 text-xs mr-2">
-                    {biz.category}
-                  </Text>
-                )}
-                {biz.district && (
-                  <View className="flex-row items-center">
-                    <Ionicons
-                      name="location-outline"
-                      size={11}
-                      color="#999"
-                    />
-                    <Text className="text-gray-400 text-xs ml-0.5">
-                      {biz.district}
-                    </Text>
-                  </View>
-                )}
-                {biz.rating > 0 && (
-                  <View className="flex-row items-center ml-2">
-                    <Ionicons
-                      name="star"
-                      size={11}
-                      color={colors.warning}
-                    />
-                    <Text className="text-gray-500 text-xs ml-0.5">
-                      {Number(biz.rating).toFixed(1)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+            </View>
+          }
+        />
       )}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: Colors.background },
+
+  header: {
+    backgroundColor: Colors.stone[700],
+    paddingTop: (StatusBar.currentHeight || 44) + 8,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    overflow: 'hidden',
+  },
+  headerCircle: {
+    position: 'absolute', width: 180, height: 180, borderRadius: 90,
+    backgroundColor: Colors.stone[600], opacity: 0.4, top: -50, right: -40,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
+  headerTitle: { ...Typography.h2, color: Colors.white, marginBottom: 2 },
+  headerSub: { ...Typography.caption, color: 'rgba(255,255,255,0.6)' },
+  viewToggle: {
+    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: BorderRadius.md, padding: 3,
+  },
+  toggleBtn: {
+    width: 36, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: BorderRadius.sm,
+  },
+  toggleBtnActive: { backgroundColor: 'rgba(255,255,255,0.2)' },
+
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.white, borderRadius: BorderRadius.xl,
+    paddingHorizontal: 14, height: 44, gap: 8,
+  },
+  searchInput: { flex: 1, ...Typography.body, color: Colors.textPrimary },
+
+  categoryWrap: { backgroundColor: Colors.white, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 12, paddingVertical: 7, borderRadius: BorderRadius.full,
+    marginRight: Spacing.sm, backgroundColor: Colors.gray[100],
+  },
+  chipText: { ...Typography.btnSm },
+
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+
+  businessCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: Colors.white,
+    marginHorizontal: Spacing.lg, marginTop: Spacing.sm,
+    borderRadius: BorderRadius.lg, padding: Spacing.md, gap: Spacing.md, ...Shadows.sm,
+  },
+  bizThumb: {
+    width: 60, height: 60, borderRadius: BorderRadius.md,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  bizBody: { flex: 1, gap: 4 },
+  bizName: { ...Typography.h4, color: Colors.textPrimary },
+  bizMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 },
+  bizMetaText: { ...Typography.caption, color: Colors.textMuted, marginRight: 4 },
+  bizRatingText: { ...Typography.caption, color: Colors.textMuted },
+  callBadge: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: Colors.forest[100], alignItems: 'center', justifyContent: 'center',
+  },
+  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: Colors.gray[300] },
+
+  resultHeader: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: 4 },
+  resultText: { ...Typography.bodySm, color: Colors.textMuted },
+
+  mapPlaceholder: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md,
+    backgroundColor: Colors.gray[50],
+  },
+  mapIcon: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: Colors.stone[50], alignItems: 'center', justifyContent: 'center', ...Shadows.md,
+  },
+  mapTitle: { ...Typography.h3, color: Colors.textPrimary },
+  mapSub: { ...Typography.body, color: Colors.textMuted, textAlign: 'center', lineHeight: 22 },
+});

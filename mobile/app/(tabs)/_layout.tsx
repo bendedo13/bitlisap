@@ -1,90 +1,111 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/theme';
+import { View, Text, StyleSheet } from 'react-native';
+import { Colors, BorderRadius, Shadows } from '../../constants/theme';
+import { useAppStore } from '../../store/appStore';
+
+function TabIcon({
+  name,
+  focused,
+  color,
+  label,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  focused: boolean;
+  color: string;
+  label: string;
+}) {
+  return (
+    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+      <Ionicons name={name} size={22} color={color} />
+      {focused && <Text style={[styles.iconLabel, { color }]}>{label}</Text>}
+    </View>
+  );
+}
 
 export default function TabLayout() {
+  const { unreadNotifications } = useAppStore();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.text.tertiary,
-        tabBarStyle: {
-          borderTopColor: colors.border,
-          height: 60,
-          paddingBottom: 8,
-        },
-        headerStyle: {
-          backgroundColor: colors.primary,
-        },
-        headerTintColor: colors.text.inverse,
-        headerTitleStyle: { fontWeight: '600' },
+        headerShown: false,
+        tabBarStyle: styles.tabBar,
+        tabBarActiveTintColor: Colors.primary[500],
+        tabBarInactiveTintColor: Colors.gray[400],
+        tabBarShowLabel: false,
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Ana Sayfa',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="home"
-              size={size}
-              color={color}
-            />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} color={color} label="Ana Sayfa" />
           ),
         }}
       />
       <Tabs.Screen
         name="news"
         options={{
-          title: 'Haberler',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="newspaper"
-              size={size}
-              color={color}
-            />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name={focused ? 'newspaper' : 'newspaper-outline'} focused={focused} color={color} label="Haberler" />
           ),
         }}
       />
       <Tabs.Screen
         name="market"
         options={{
-          title: 'Pazar',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="pricetag"
-              size={size}
-              color={color}
-            />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name={focused ? 'pricetag' : 'pricetag-outline'} focused={focused} color={color} label="Pazar" />
           ),
         }}
       />
       <Tabs.Screen
         name="map"
         options={{
-          title: 'Harita',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="map"
-              size={size}
-              color={color}
-            />
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name={focused ? 'map' : 'map-outline'} focused={focused} color={color} label="Harita" />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profil',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons
-              name="person"
-              size={size}
-              color={color}
-            />
+          tabBarBadge: unreadNotifications > 0 ? unreadNotifications : undefined,
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} color={color} label="Profil" />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBar: {
+    backgroundColor: Colors.white,
+    borderTopWidth: 0,
+    height: 72,
+    paddingBottom: 12,
+    paddingTop: 8,
+    ...Shadows.xl,
+  },
+  iconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    minWidth: 44,
+  },
+  iconWrapActive: {
+    backgroundColor: Colors.primary[50],
+    flexDirection: 'row',
+    gap: 4,
+  },
+  iconLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+});
