@@ -37,7 +37,13 @@ export default function LoginScreen() {
       setAuth(res.data.user, res.data.token, res.data.refreshToken);
       router.replace('/(tabs)' as any);
     } catch (e: any) {
-      setError(e?.response?.data?.message || 'Giriş başarısız');
+      if (e?.code === 'ECONNABORTED' || e?.message?.includes('timeout')) {
+        setError('Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edin.');
+      } else if (!e?.response) {
+        setError('Sunucuya ulaşılamıyor. Lütfen daha sonra tekrar deneyin.');
+      } else {
+        setError(e?.response?.data?.message || 'Giriş başarısız');
+      }
     } finally {
       setLoading(false);
     }

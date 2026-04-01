@@ -2,12 +2,15 @@ import { create } from 'zustand';
 
 interface User {
   id: string;
-  phone: string;
+  email: string;
+  phone: string | null;
   fullName: string | null;
   avatarUrl: string | null;
   district: string | null;
   userType: string;
   cityPoints: number;
+  businessName?: string | null;
+  isVerified?: boolean;
 }
 
 interface AuthState {

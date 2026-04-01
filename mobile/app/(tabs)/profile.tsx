@@ -181,6 +181,14 @@ export default function ProfileScreen() {
           <MenuItem icon="log-out-outline" label="Çıkış Yap" onPress={handleLogout} danger />
         </MenuSection>
 
+        {/* Legal */}
+        <MenuSection title="Yasal">
+          <MenuItem icon="shield-checkmark-outline" label="Gizlilik Politikası" onPress={() => router.push('/legal/privacy' as any)} color={Colors.primary[500]} />
+          <MenuItem icon="document-text-outline" label="Kullanım Koşulları" onPress={() => router.push('/legal/terms' as any)} color={Colors.primary[500]} />
+          <MenuItem icon="lock-closed-outline" label="KVKK Aydınlatma Metni" onPress={() => router.push('/legal/kvkk' as any)} color={Colors.primary[500]} />
+          <MenuItem icon="information-circle-outline" label="Hakkımızda" onPress={() => router.push('/legal/about' as any)} color={Colors.stone[500]} />
+        </MenuSection>
+
         <Text style={styles.versionText}>Bitlis Şehrim v1.0.0</Text>
       </ScrollView>
     </View>

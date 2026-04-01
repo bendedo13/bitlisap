@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Linking,
   ActivityIndicator,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -83,11 +84,69 @@ function BusinessCard({ item, onPress }: { item: any; onPress: () => void }) {
   );
 }
 
+function LeafletMap({ businesses }: { businesses: any[] }) {
+  const markers = businesses
+    .filter((b) => b.latitude && b.longitude)
+    .map(
+      (b) =>
+        `L.marker([${b.latitude}, ${b.longitude}])
+          .addTo(map)
+          .bindPopup('<b>${b.name.replace(/'/g, "\\'")}</b><br>${(b.district || 'Bitlis').replace(/'/g, "\\'")}');`
+    )
+    .join('\n');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #map { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    var map = L.map('map').setView([38.4003, 42.1097], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19
+    }).addTo(map);
+    L.marker([38.4003, 42.1097])
+      .addTo(map)
+      .bindPopup('<b>Bitlis Merkezi</b><br>38.4003°K, 42.1097°D')
+      .openPopup();
+    ${markers}
+  </script>
+</body>
+</html>`;
+
+  return (
+    <WebView
+      source={{ html }}
+      style={{ flex: 1 }}
+      originWhitelist={['*']}
+      javaScriptEnabled
+      domStorageEnabled
+      startInLoadingState
+      renderLoading={() => (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={Colors.stone[600]} size="large" />
+        </View>
+      )}
+    />
+  );
+}
+
 export default function MapScreen() {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [view, setView] = useState<'list' | 'map'>('list');
+  const webViewRef = useRef<WebView>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['businesses', category],
@@ -175,17 +234,7 @@ export default function MapScreen() {
       </View>
 
       {view === 'map' ? (
-        /* Map Placeholder */
-        <View style={styles.mapPlaceholder}>
-          <View style={styles.mapIcon}>
-            <Ionicons name="map" size={56} color={Colors.stone[400]} />
-          </View>
-          <Text style={styles.mapTitle}>Harita Görünümü</Text>
-          <Text style={styles.mapSub}>
-            Bitlis Merkezi{'\n'}38.4003°K, 42.1097°D
-          </Text>
-          <Badge label="Yakında Aktif" color={Colors.stone[50]} textColor={Colors.stone[600]} size="md" />
-        </View>
+        <LeafletMap businesses={filtered} />
       ) : isLoading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={Colors.stone[600]} size="large" />
@@ -286,15 +335,4 @@ const styles = StyleSheet.create({
 
   resultHeader: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md, paddingBottom: 4 },
   resultText: { ...Typography.bodySm, color: Colors.textMuted },
-
-  mapPlaceholder: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.md,
-    backgroundColor: Colors.gray[50],
-  },
-  mapIcon: {
-    width: 100, height: 100, borderRadius: 50,
-    backgroundColor: Colors.stone[50], alignItems: 'center', justifyContent: 'center', ...Shadows.md,
-  },
-  mapTitle: { ...Typography.h3, color: Colors.textPrimary },
-  mapSub: { ...Typography.body, color: Colors.textMuted, textAlign: 'center', lineHeight: 22 },
 });
