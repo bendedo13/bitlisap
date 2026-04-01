@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
@@ -28,35 +29,53 @@ const GENDERS = [
 export default function RegisterScreen() {
   const router = useRouter();
   const { setAuth } = useAuthStore();
-  const [step, setStep] = useState(1); // 1: zorunlu, 2: opsiyonel
+  const insets = useSafeAreaInsets();
+  const [step, setStep] = useState(0); // 0: tür seç, 1: zorunlu, 2: ek bilgiler
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+
+  // Role
+  const [userType, setUserType] = useState<'USER' | 'BUSINESS' | ''>('');
 
   // Required
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Optional
+  // User optional
   const [age, setAge] = useState('');
   const [occupation, setOccupation] = useState('');
   const [gender, setGender] = useState('');
   const [district, setDistrict] = useState('');
 
+  // Business required (step 2 for BUSINESS)
+  const [businessName, setBusinessName] = useState('');
+  const [taxNo, setTaxNo] = useState('');
+
   const handleRegister = async () => {
-    if (!fullName.trim() || !email.trim() || !password.trim()) {
-      setError('Zorunlu alanları doldurun'); return;
-    }
-    if (password.length < 6) { setError('Şifre en az 6 karakter olmalı'); return; }
     setError('');
+    if (userType === 'BUSINESS') {
+      if (!businessName.trim()) { setError('İşletme adı zorunludur'); return; }
+      if (!taxNo.trim()) { setError('Vergi kimlik no zorunludur'); return; }
+    }
     setLoading(true);
     try {
-      const body: any = { fullName: fullName.trim(), email: email.trim(), password };
-      if (age) body.age = parseInt(age);
-      if (occupation) body.occupation = occupation.trim();
-      if (gender) body.gender = gender;
-      if (district) body.district = district;
+      const body: any = {
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+        userType: userType || 'USER',
+      };
+      if (userType === 'BUSINESS') {
+        body.businessName = businessName.trim();
+        body.taxNo = taxNo.trim();
+      } else {
+        if (age) body.age = parseInt(age);
+        if (occupation) body.occupation = occupation.trim();
+        if (gender) body.gender = gender;
+        if (district) body.district = district;
+      }
 
       const res = await api.post('/auth/register', body);
       setAuth(res.data.user, res.data.token, res.data.refreshToken);
@@ -72,7 +91,7 @@ export default function RegisterScreen() {
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary[800]} />
 
-      <View style={styles.hero}>
+      <View style={[styles.hero, { paddingTop: insets.top + 12 }]}>
         <View style={styles.heroCircle} />
         <View style={styles.heroIcon}>
           <Ionicons name="person-add-outline" size={32} color={Colors.white} />
@@ -83,14 +102,19 @@ export default function RegisterScreen() {
 
       {/* Step Indicator */}
       <View style={styles.steps}>
-        <TouchableOpacity style={[styles.stepItem, step >= 1 && styles.stepItemActive]} onPress={() => setStep(1)}>
-          <Text style={[styles.stepNum, step >= 1 && styles.stepNumActive]}>1</Text>
+        <TouchableOpacity style={[styles.stepItem, step >= 0 && styles.stepItemActive]} onPress={() => setStep(0)}>
+          <Text style={[styles.stepNum, step >= 0 && styles.stepNumActive]}>1</Text>
+          <Text style={[styles.stepLabel, step >= 0 && styles.stepLabelActive]}>Tür</Text>
+        </TouchableOpacity>
+        <View style={[styles.stepLine, step >= 1 && { backgroundColor: Colors.primary[600] }]} />
+        <TouchableOpacity style={[styles.stepItem, step >= 1 && styles.stepItemActive]} onPress={() => step >= 1 && setStep(1)}>
+          <Text style={[styles.stepNum, step >= 1 && styles.stepNumActive]}>2</Text>
           <Text style={[styles.stepLabel, step >= 1 && styles.stepLabelActive]}>Zorunlu</Text>
         </TouchableOpacity>
         <View style={[styles.stepLine, step >= 2 && { backgroundColor: Colors.primary[600] }]} />
-        <TouchableOpacity style={[styles.stepItem, step >= 2 && styles.stepItemActive]} onPress={() => step >= 1 && setStep(2)}>
-          <Text style={[styles.stepNum, step >= 2 && styles.stepNumActive]}>2</Text>
-          <Text style={[styles.stepLabel, step >= 2 && styles.stepLabelActive]}>Opsiyonel</Text>
+        <TouchableOpacity style={[styles.stepItem, step >= 2 && styles.stepItemActive]} onPress={() => step >= 2 && setStep(2)}>
+          <Text style={[styles.stepNum, step >= 2 && styles.stepNumActive]}>3</Text>
+          <Text style={[styles.stepLabel, step >= 2 && styles.stepLabelActive]}>{userType === 'BUSINESS' ? 'İşletme' : 'Ek Bilgi'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -100,7 +124,56 @@ export default function RegisterScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {step === 1 ? (
+        {step === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Hesap Türü</Text>
+            <Text style={styles.sectionSub}>Nasıl kullanacağınızı belirleyin</Text>
+
+            <TouchableOpacity
+              style={[styles.roleCard, userType === 'USER' && styles.roleCardActive]}
+              onPress={() => setUserType('USER')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.roleIcon, userType === 'USER' && { backgroundColor: Colors.primary[600] }]}>
+                <Ionicons name="person-outline" size={28} color={userType === 'USER' ? Colors.white : Colors.primary[600]} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.roleTitle, userType === 'USER' && { color: Colors.primary[700] }]}>Bireysel Üye</Text>
+                <Text style={styles.roleDesc}>Haberleri takip edin, etkinliklere katılın, şehri keşfedin</Text>
+              </View>
+              {userType === 'USER' && <Ionicons name="checkmark-circle" size={22} color={Colors.primary[600]} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.roleCard, userType === 'BUSINESS' && styles.roleCardActiveBusiness]}
+              onPress={() => setUserType('BUSINESS')}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.roleIcon, { backgroundColor: userType === 'BUSINESS' ? Colors.forest[500] : Colors.forest[500] + '22' }]}>
+                <Ionicons name="storefront-outline" size={28} color={userType === 'BUSINESS' ? Colors.white : Colors.forest[500]} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.roleTitle, userType === 'BUSINESS' && { color: Colors.forest[600] }]}>Kurumsal Üye (Esnaf)</Text>
+                <Text style={styles.roleDesc}>İşletmenizi listeleyin, kampanyalar oluşturun, müşterilerinize ulaşın</Text>
+              </View>
+              {userType === 'BUSINESS' && <Ionicons name="checkmark-circle" size={22} color={Colors.forest[500]} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btn, { opacity: userType ? 1 : 0.45 }]}
+              onPress={() => userType && setStep(1)}
+              disabled={!userType}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.btnText}>Devam Et</Text>
+              <Ionicons name="arrow-forward" size={18} color={Colors.white} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.loginLink} onPress={() => router.push('/(auth)/login' as any)}>
+              <Text style={styles.loginLinkText}>Zaten hesabınız var mı? <Text style={{ color: Colors.primary[600], fontWeight: '600' }}>Giriş Yapın</Text></Text>
+            </TouchableOpacity>
+          </View>
+        ) : step === 1 ? (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Temel Bilgiler</Text>
             <Text style={styles.sectionSub}>Bu alanlar zorunludur</Text>
@@ -153,66 +226,107 @@ export default function RegisterScreen() {
           </View>
         ) : (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Ek Bilgiler</Text>
-            <Text style={styles.sectionSub}>Bu alanlar opsiyoneldir, daha sonra da doldurabilirsiniz</Text>
+            <Text style={styles.sectionTitle}>{userType === 'BUSINESS' ? 'İşletme Bilgileri' : 'Ek Bilgiler'}</Text>
+            <Text style={styles.sectionSub}>{userType === 'BUSINESS' ? 'Bu bilgiler hesabınız için zorunludur' : 'Bu alanlar opsiyoneldir, daha sonra da doldurabilirsiniz'}</Text>
 
-            {/* Age */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Yaş</Text>
-              <View style={styles.inputRow}>
-                <Ionicons name="calendar-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
-                <TextInput style={styles.input} placeholder="25" placeholderTextColor={Colors.gray[400]} keyboardType="number-pad" maxLength={3} value={age} onChangeText={setAge} />
-              </View>
-            </View>
+            {userType === 'BUSINESS' ? (
+              <>
+                {/* Business Name */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>İşletme Adı *</Text>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="storefront-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
+                    <TextInput style={styles.input} placeholder="Örn: Nemrut Cafe" placeholderTextColor={Colors.gray[400]} value={businessName} onChangeText={setBusinessName} />
+                  </View>
+                </View>
 
-            {/* Occupation */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Meslek</Text>
-              <View style={styles.inputRow}>
-                <Ionicons name="briefcase-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
-                <TextInput style={styles.input} placeholder="Mühendis, Öğretmen, Esnaf..." placeholderTextColor={Colors.gray[400]} value={occupation} onChangeText={setOccupation} />
-              </View>
-            </View>
+                {/* Tax No */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Vergi Kimlik No *</Text>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="document-text-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
+                    <TextInput style={styles.input} placeholder="10 haneli vergi numarası" placeholderTextColor={Colors.gray[400]} keyboardType="number-pad" maxLength={11} value={taxNo} onChangeText={setTaxNo} />
+                  </View>
+                </View>
 
-            {/* Gender */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Cinsiyet</Text>
-              <View style={styles.genderRow}>
-                {GENDERS.map((g) => (
-                  <TouchableOpacity
-                    key={g.key}
-                    style={[styles.genderChip, gender === g.key && { backgroundColor: Colors.primary[600], borderColor: Colors.primary[600] }]}
-                    onPress={() => setGender(gender === g.key ? '' : g.key)}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons name={g.icon} size={14} color={gender === g.key ? Colors.white : Colors.textMuted} />
-                    <Text style={[styles.genderText, gender === g.key && { color: Colors.white }]}>{g.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                {/* District for business */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>İlçe</Text>
+                  <View style={styles.districtGrid}>
+                    {DISTRICTS.map((d) => (
+                      <TouchableOpacity
+                        key={d}
+                        style={[styles.districtChip, district === d && { backgroundColor: Colors.forest[500], borderColor: Colors.forest[500] }]}
+                        onPress={() => setDistrict(district === d ? '' : d)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.districtText, district === d && { color: Colors.white }]}>{d}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Age */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Yaş</Text>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="calendar-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
+                    <TextInput style={styles.input} placeholder="25" placeholderTextColor={Colors.gray[400]} keyboardType="number-pad" maxLength={3} value={age} onChangeText={setAge} />
+                  </View>
+                </View>
 
-            {/* District */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>İlçe</Text>
-              <View style={styles.districtGrid}>
-                {DISTRICTS.map((d) => (
-                  <TouchableOpacity
-                    key={d}
-                    style={[styles.districtChip, district === d && { backgroundColor: Colors.primary[600], borderColor: Colors.primary[600] }]}
-                    onPress={() => setDistrict(district === d ? '' : d)}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.districtText, district === d && { color: Colors.white }]}>{d}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                {/* Occupation */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Meslek</Text>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="briefcase-outline" size={18} color={Colors.gray[400]} style={{ marginLeft: 14 }} />
+                    <TextInput style={styles.input} placeholder="Mühendis, Öğretmen, Esnaf..." placeholderTextColor={Colors.gray[400]} value={occupation} onChangeText={setOccupation} />
+                  </View>
+                </View>
+
+                {/* Gender */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Cinsiyet</Text>
+                  <View style={styles.genderRow}>
+                    {GENDERS.map((g) => (
+                      <TouchableOpacity
+                        key={g.key}
+                        style={[styles.genderChip, gender === g.key && { backgroundColor: Colors.primary[600], borderColor: Colors.primary[600] }]}
+                        onPress={() => setGender(gender === g.key ? '' : g.key)}
+                        activeOpacity={0.75}
+                      >
+                        <Ionicons name={g.icon} size={14} color={gender === g.key ? Colors.white : Colors.textMuted} />
+                        <Text style={[styles.genderText, gender === g.key && { color: Colors.white }]}>{g.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                {/* District */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>İlçe</Text>
+                  <View style={styles.districtGrid}>
+                    {DISTRICTS.map((d) => (
+                      <TouchableOpacity
+                        key={d}
+                        style={[styles.districtChip, district === d && { backgroundColor: Colors.primary[600], borderColor: Colors.primary[600] }]}
+                        onPress={() => setDistrict(district === d ? '' : d)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.districtText, district === d && { color: Colors.white }]}>{d}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </>
+            )}
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <TouchableOpacity
-              style={[styles.btn, { backgroundColor: Colors.forest[500], opacity: loading ? 0.7 : 1 }]}
+              style={[styles.btn, { backgroundColor: userType === 'BUSINESS' ? Colors.forest[500] : Colors.forest[500], opacity: loading ? 0.7 : 1 }]}
               onPress={handleRegister}
               disabled={loading}
               activeOpacity={0.85}
@@ -227,9 +341,11 @@ export default function RegisterScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.skipBtn} onPress={handleRegister}>
-              <Text style={styles.skipText}>Bu adımı atla, hemen başla</Text>
-            </TouchableOpacity>
+            {userType !== 'BUSINESS' && (
+              <TouchableOpacity style={styles.skipBtn} onPress={handleRegister}>
+                <Text style={styles.skipText}>Bu adımı atla, hemen başla</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
@@ -241,7 +357,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
   hero: {
     backgroundColor: Colors.primary[800],
-    paddingTop: (StatusBar.currentHeight || 44) + 12,
     paddingBottom: Spacing.xl,
     alignItems: 'center',
     overflow: 'hidden',
@@ -330,4 +445,20 @@ const styles = StyleSheet.create({
 
   skipBtn: { alignItems: 'center', marginTop: Spacing.md },
   skipText: { ...Typography.label, color: Colors.primary[500] },
+
+  roleCard: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
+    padding: Spacing.md, borderRadius: BorderRadius.xl,
+    borderWidth: 2, borderColor: Colors.border,
+    marginBottom: Spacing.md, backgroundColor: Colors.gray[50],
+  },
+  roleCardActive: { borderColor: Colors.primary[500], backgroundColor: Colors.primary[50] },
+  roleCardActiveBusiness: { borderColor: Colors.forest[500], backgroundColor: '#f0fdf4' },
+  roleIcon: {
+    width: 52, height: 52, borderRadius: BorderRadius.lg,
+    backgroundColor: Colors.primary[50],
+    alignItems: 'center', justifyContent: 'center',
+  },
+  roleTitle: { ...Typography.h4, color: Colors.textPrimary, marginBottom: 2 },
+  roleDesc: { ...Typography.caption, color: Colors.textMuted, flexShrink: 1 },
 });

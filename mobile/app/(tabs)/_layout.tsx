@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Animated } from 'react-native';
+import { useEffect, useRef } from 'react';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { useAppStore } from '../../store/appStore';
 
@@ -15,11 +16,22 @@ function TabIcon({
   color: string;
   label: string;
 }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.spring(scale, {
+      toValue: focused ? 1.12 : 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 8,
+    }).start();
+  }, [focused]);
+
   return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+    <Animated.View style={[styles.iconWrap, focused && styles.iconWrapActive, { transform: [{ scale }] }]}>
       <Ionicons name={name} size={22} color={color} />
       {focused && <Text style={[styles.iconLabel, { color }]}>{label}</Text>}
-    </View>
+    </Animated.View>
   );
 }
 

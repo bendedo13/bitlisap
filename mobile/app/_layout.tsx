@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../constants/theme';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 
@@ -38,6 +39,7 @@ export default function RootLayout() {
   );
 
   return (
+    <SafeAreaProvider>
     <PersistQueryClientProvider
       client={queryClient}
       persistOptions={{
@@ -129,5 +131,6 @@ export default function RootLayout() {
         />
       </Stack>
     </PersistQueryClientProvider>
+    </SafeAreaProvider>
   );
 }

@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newsService } from '../../services/newsService';
 import { useAuthStore } from '../../store/authStore';
 import { useAppStore } from '../../store/appStore';
@@ -19,6 +20,7 @@ import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../consta
 import Card from '../../components/ui/Card';
 import Badge from '../../components/ui/Badge';
 import SectionHeader from '../../components/ui/SectionHeader';
+import api from '../../services/api';
 
 const QUICK_ACTIONS = [
   { icon: 'call' as const, label: 'Acil', sublabel: '112', color: Colors.danger[600], bg: Colors.danger[100], number: '112' },
@@ -48,6 +50,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { weatherData } = useAppStore();
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const { data: newsData, refetch } = useQuery({
@@ -58,6 +61,28 @@ export default function HomeScreen() {
   const { data: breakingData } = useQuery({
     queryKey: ['news', 'breaking'],
     queryFn: () => newsService.getBreaking(),
+  });
+
+  const { data: alertData } = useQuery({
+    queryKey: ['alert', 'active'],
+    queryFn: () => api.get('/alerts/active').then(r => r.data),
+    retry: false,
+  });
+
+  const { data: campaignsData } = useQuery({
+    queryKey: ['campaigns'],
+    queryFn: () => api.get('/campaigns').then(r => r.data),
+  });
+
+  const { data: taxisData } = useQuery({
+    queryKey: ['taxis'],
+    queryFn: () => api.get('/taxis').then(r => r.data),
+  });
+
+  const { data: dutyPharmacyData } = useQuery({
+    queryKey: ['pharmacies', 'duty'],
+    queryFn: () => api.get('/pharmacies/duty').then(r => r.data),
+    retry: false,
   });
 
   const onRefresh = useCallback(async () => {
@@ -78,7 +103,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary[800]} />
 
       {/* ── Hero Header ── */}
-      <View style={styles.hero}>
+      <View style={[styles.hero, { paddingTop: insets.top + 8 }]}>
         <View style={styles.heroCircle1} />
         <View style={styles.heroCircle2} />
         <View style={styles.heroCircle3} />
@@ -119,6 +144,23 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary[500]} />}
         contentContainerStyle={{ paddingBottom: 20 }}
       >
+        {/* ── Emergency Alert Banner ── */}
+        {alertData?.alert && (
+          <View style={[styles.alertBanner,
+            alertData.alert.severity === 'CRITICAL' && { backgroundColor: Colors.danger[700] },
+            alertData.alert.severity === 'HIGH' && { backgroundColor: Colors.danger[600] },
+            alertData.alert.severity === 'MEDIUM' && { backgroundColor: Colors.gold[500] },
+            alertData.alert.severity === 'LOW' && { backgroundColor: Colors.forest[500] },
+          ]}>
+            <Ionicons name="warning-outline" size={20} color={Colors.white} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>{alertData.alert.title}</Text>
+              <Text style={styles.alertMsg} numberOfLines={2}>{alertData.alert.message}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+          </View>
+        )}
+
         {/* ── Breaking News ── */}
         {(breakingData as any)?.news?.[0] && (
           <TouchableOpacity
@@ -138,6 +180,69 @@ export default function HomeScreen() {
             <Ionicons name="chevron-forward" size={20} color={Colors.white} />
           </TouchableOpacity>
         )}
+
+        {/* ── Campaigns ── */}
+        {(campaignsData?.campaigns?.length ?? 0) > 0 && (
+          <View style={styles.section}>
+            <SectionHeader title="Kampanyalar" subtitle="Şehrin fırsatları" accentColor={Colors.gold[500]} />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: Spacing.lg, gap: Spacing.md }}>
+              {(campaignsData.campaigns as any[]).slice(0, 8).map((c: any) => (
+                <View key={c.id} style={styles.campaignCard}>
+                  <View style={[styles.campaignBadge, { backgroundColor: Colors.gold[400] + '33' }]}>
+                    <Ionicons name="pricetag-outline" size={14} color={Colors.gold[600]} />
+                  </View>
+                  <Text style={styles.campaignTitle} numberOfLines={2}>{c.title}</Text>
+                  <Text style={styles.campaignDiscount}>{c.discountPercent}% İndirim</Text>
+                  <Text style={styles.campaignBiz} numberOfLines={1}>{c.business?.name ?? c.businessId}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ── Taxi & Pharmacy Row ── */}
+        <View style={[styles.section, { paddingHorizontal: Spacing.lg }]}>
+          <View style={styles.serviceRow}>
+            {/* Taxis Widget */}
+            <TouchableOpacity style={styles.serviceWidget} activeOpacity={0.85} onPress={() => router.push('/tourism' as any)}>
+              <View style={[styles.serviceWidgetIcon, { backgroundColor: Colors.gold[400] + '22' }]}>
+                <Ionicons name="car-outline" size={22} color={Colors.gold[600]} />
+              </View>
+              <Text style={styles.serviceWidgetTitle}>Taksi</Text>
+              {(taxisData?.taxis?.length ?? 0) > 0 ? (
+                <Text style={styles.serviceWidgetSub}>{(taxisData.taxis as any[])[0].phone}</Text>
+              ) : (
+                <Text style={styles.serviceWidgetSub}>Durağa git</Text>
+              )}
+              <View style={styles.serviceWidgetBtn}>
+                <Text style={styles.serviceWidgetBtnText}>Ara</Text>
+                <Ionicons name="call-outline" size={12} color={Colors.gold[600]} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Duty Pharmacy Widget */}
+            <TouchableOpacity style={[styles.serviceWidget, { marginLeft: Spacing.sm }]} activeOpacity={0.85}>
+              <View style={[styles.serviceWidgetIcon, { backgroundColor: Colors.forest[500] + '22' }]}>
+                <Ionicons name="medkit-outline" size={22} color={Colors.forest[500]} />
+              </View>
+              <Text style={styles.serviceWidgetTitle}>Nöbetçi Eczane</Text>
+              {dutyPharmacyData?.pharmacy ? (
+                <>
+                  <Text style={styles.serviceWidgetSub} numberOfLines={1}>{dutyPharmacyData.pharmacy.name}</Text>
+                  <TouchableOpacity
+                    style={[styles.serviceWidgetBtn, { backgroundColor: Colors.forest[500] + '18', borderColor: Colors.forest[500] }]}
+                    onPress={() => Linking.openURL(`tel:${dutyPharmacyData.pharmacy.phone}`)}
+                  >
+                    <Text style={[styles.serviceWidgetBtnText, { color: Colors.forest[600] }]}>Ara</Text>
+                    <Ionicons name="call-outline" size={12} color={Colors.forest[500]} />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Text style={styles.serviceWidgetSub}>Bilgi yok</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* ── Quick Actions ── */}
         <View style={styles.section}>
@@ -246,7 +351,6 @@ const styles = StyleSheet.create({
   // Hero
   hero: {
     backgroundColor: Colors.primary[800],
-    paddingTop: (StatusBar.currentHeight || 44) + 8,
     paddingHorizontal: Spacing.lg,
     paddingBottom: Spacing.xl,
     overflow: 'hidden',
@@ -297,6 +401,16 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   section: { marginTop: Spacing.xl },
 
+  // Emergency Alert
+  alertBanner: {
+    marginTop: Spacing.lg, marginHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg, padding: Spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    ...Shadows.md,
+  },
+  alertTitle: { ...Typography.label, color: Colors.white, fontWeight: '700', marginBottom: 2 },
+  alertMsg: { ...Typography.caption, color: 'rgba(255,255,255,0.82)' },
+
   // Breaking
   breakingBanner: {
     marginTop: Spacing.lg, marginHorizontal: Spacing.lg,
@@ -309,6 +423,42 @@ const styles = StyleSheet.create({
   breakingDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.white },
   breakingBadgeText: { ...Typography.label, color: Colors.white },
   breakingTitle: { ...Typography.body, color: Colors.white, fontWeight: '600' },
+
+  // Campaigns
+  campaignCard: {
+    width: 150, backgroundColor: Colors.white, borderRadius: BorderRadius.xl,
+    padding: Spacing.md, ...Shadows.sm,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  campaignBadge: {
+    width: 32, height: 32, borderRadius: BorderRadius.md,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+  },
+  campaignTitle: { ...Typography.label, color: Colors.textPrimary, fontWeight: '600', marginBottom: 4 },
+  campaignDiscount: { fontSize: 15, fontWeight: '800', color: Colors.gold[600], marginBottom: 4 },
+  campaignBiz: { ...Typography.caption, color: Colors.textMuted },
+
+  // Taxi & Pharmacy
+  serviceRow: { flexDirection: 'row' },
+  serviceWidget: {
+    flex: 1, backgroundColor: Colors.white, borderRadius: BorderRadius.xl,
+    padding: Spacing.md, ...Shadows.sm,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  serviceWidgetIcon: {
+    width: 40, height: 40, borderRadius: BorderRadius.md,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 8,
+  },
+  serviceWidgetTitle: { ...Typography.label, color: Colors.textPrimary, fontWeight: '700', marginBottom: 4 },
+  serviceWidgetSub: { ...Typography.caption, color: Colors.textMuted, marginBottom: 8 },
+  serviceWidgetBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: Colors.gold[400] + '18',
+    borderRadius: BorderRadius.md, paddingHorizontal: 10, paddingVertical: 5,
+    borderWidth: 1, borderColor: Colors.gold[400],
+    alignSelf: 'flex-start',
+  },
+  serviceWidgetBtnText: { ...Typography.caption, fontWeight: '700', color: Colors.gold[600] },
 
   // Quick Actions
   quickActionsRow: { flexDirection: 'row', paddingHorizontal: Spacing.lg, gap: Spacing.sm },

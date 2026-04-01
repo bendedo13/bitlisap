@@ -13,12 +13,22 @@ const registerSchema = z.object({
   password: z.string().min(6, 'Şifre en az 6 karakter olmalı'),
   fullName: z.string().min(2, 'Ad soyad en az 2 karakter olmalı'),
   phone: z.string().optional(),
+  userType: z.enum(['USER', 'BUSINESS']).default('USER'),
+  // Business fields
+  businessName: z.string().min(2, 'İşletme adı en az 2 karakter olmalı').optional(),
+  taxNo: z.string().min(10, 'Geçerli bir vergi numarası girin').max(11).optional(),
+  // Personal fields
   age: z.number().int().min(13).max(120).optional(),
   occupation: z.string().max(100).optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY']).optional(),
   district: z.string().optional(),
   bio: z.string().max(500).optional(),
-});
+}).refine((data) => {
+  if (data.userType === 'BUSINESS') {
+    return !!data.businessName && !!data.taxNo;
+  }
+  return true;
+}, { message: 'Kurumsal üye için işletme adı ve vergi numarası zorunludur', path: ['businessName'] });
 
 const loginSchema = z.object({
   email: z.string().email('Geçerli bir e-posta adresi girin'),
@@ -39,12 +49,12 @@ const updateProfileSchema = z.object({
 function generateTokens(userId: string, userType: string) {
   const token = jwt.sign(
     { userId, userType },
-    config.jwtSecret,
+    config.JWT_SECRET,
     { expiresIn: '7d' }
   );
   const refreshToken = jwt.sign(
     { userId, type: 'refresh' },
-    config.jwtSecret,
+    config.JWT_SECRET,
     { expiresIn: '30d' }
   );
   return { token, refreshToken };
@@ -65,6 +75,20 @@ export async function register(req: Request, res: Response) {
       return res.status(409).json({ message: 'Bu e-posta adresi zaten kayıtlı' });
     }
 
+    if (data.phone) {
+      const phoneExists = await prisma.user.findUnique({ where: { phone: data.phone } });
+      if (phoneExists) {
+        return res.status(409).json({ message: 'Bu telefon numarası zaten kayıtlı' });
+      }
+    }
+
+    if (data.taxNo) {
+      const taxExists = await prisma.user.findFirst({ where: { taxNo: data.taxNo } });
+      if (taxExists) {
+        return res.status(409).json({ message: 'Bu vergi numarası zaten kayıtlı' });
+      }
+    }
+
     const passwordHash = await bcrypt.hash(data.password, 12);
 
     const user = await prisma.user.create({
@@ -73,9 +97,12 @@ export async function register(req: Request, res: Response) {
         passwordHash,
         fullName: data.fullName,
         phone: data.phone,
+        userType: data.userType as any,
+        businessName: data.businessName,
+        taxNo: data.taxNo,
         age: data.age,
         occupation: data.occupation,
-        gender: data.gender,
+        gender: data.gender as any,
         district: data.district,
         bio: data.bio,
       },
@@ -85,14 +112,14 @@ export async function register(req: Request, res: Response) {
     await prisma.pointTransaction.create({
       data: {
         userId: user.id,
-        points: 50,
+        points: data.userType === 'BUSINESS' ? 100 : 50,
         reason: 'WELCOME',
-        description: 'Hoş geldin bonusu! Bitlis Şehrim\'e katıldın.',
+        description: `Hoş geldin bonusu! Bitlis Şehrim'e katıldın.`,
       },
     });
     await prisma.user.update({
       where: { id: user.id },
-      data: { cityPoints: { increment: 50 } },
+      data: { cityPoints: { increment: data.userType === 'BUSINESS' ? 100 : 50 } },
     });
 
     const tokens = generateTokens(user.id, user.userType);
@@ -155,7 +182,7 @@ export async function login(req: Request, res: Response) {
 // ─── Update Profile ───
 export async function updateProfile(req: Request, res: Response) {
   try {
-    const userId = (req as any).auth.userId;
+    const userId = (req as any).user.userId;
     const data = updateProfileSchema.parse(req.body);
 
     const user = await prisma.user.update({
@@ -198,7 +225,7 @@ export async function refreshToken(req: Request, res: Response) {
 // ─── Get Me ───
 export async function getMe(req: Request, res: Response) {
   try {
-    const userId = (req as any).auth.userId;
+    const userId = (req as any).user.userId;
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -218,7 +245,7 @@ export async function getMe(req: Request, res: Response) {
 // ─── Logout (set offline) ───
 export async function logout(req: Request, res: Response) {
   try {
-    const userId = (req as any).auth.userId;
+    const userId = (req as any).user.userId;
     await prisma.user.update({
       where: { id: userId },
       data: { isOnline: false, lastSeen: new Date() },

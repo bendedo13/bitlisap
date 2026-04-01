@@ -74,6 +74,13 @@ enum SubscriptionPlan {
   ENTERPRISE
 }
 
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 // ─── User ───
 model User {
   id           String    @id @default(uuid())
@@ -91,6 +98,10 @@ model User {
   occupation   String?
   gender       Gender?
   bio          String?
+
+  // Business registration fields
+  businessName String?   @map("business_name")
+  taxNo        String?   @unique @map("tax_no")
 
   // Online status
   isOnline     Boolean   @default(false) @map("is_online")
@@ -115,6 +126,9 @@ model User {
   conversations2   Conversation[]    @relation("User2Conversations")
   advertisements   Advertisement[]
   partnerships     Partnership[]
+  newsAuthored     News[]
+  eventsOrganized  Event[]
+  emergencyAlerts  EmergencyAlert[]
 
   @@map("users")
 }
@@ -125,6 +139,7 @@ model Business {
   name          String
   description   String?
   category      String
+  subcategory   String?
   district      String
   address       String?
   phone         String?
@@ -135,15 +150,18 @@ model Business {
   reviewCount   Int      @default(0) @map("review_count")
   isVerified    Boolean  @default(false) @map("is_verified")
   isPremium     Boolean  @default(false) @map("is_premium")
+  isActive      Boolean  @default(true) @map("is_active")
   logoUrl       String?  @map("logo_url")
   coverUrl      String?  @map("cover_url")
+  photos        String[]
   workingHours  String?  @map("working_hours")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  ownerId String @map("owner_id")
-  owner   User   @relation(fields: [ownerId], references: [id])
-  reviews Review[]
+  ownerId   String     @map("owner_id")
+  owner     User       @relation(fields: [ownerId], references: [id])
+  reviews   Review[]
+  campaigns Campaign[]
 
   @@map("businesses")
 }
@@ -156,9 +174,12 @@ model Listing {
   price         Float?
   isNegotiable  Boolean       @default(false) @map("is_negotiable")
   category      String
+  subcategory   String?
   district      String?
   images        String[]
+  photos        String[]
   status        ListingStatus @default(ACTIVE)
+  isActive      Boolean       @default(true) @map("is_active")
   isPremium     Boolean       @default(false) @map("is_premium")
   viewCount     Int           @default(0) @map("view_count")
   createdAt     DateTime      @default(now()) @map("created_at")
@@ -187,29 +208,38 @@ model News {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  authorId    String?  @map("author_id")
+  author      User?    @relation(fields: [authorId], references: [id])
+
   @@map("news")
 }
 
 // ─── Event ───
 model Event {
-  id          String      @id @default(uuid())
-  title       String
-  description String?
-  date        DateTime
-  endDate     DateTime?   @map("end_date")
-  location    String?
-  category    String?
-  imageUrl    String?     @map("image_url")
-  capacity    Int?
-  attendees   Int         @default(0)
-  isFree      Boolean     @default(true) @map("is_free")
-  price       Float?
-  status      EventStatus @default(UPCOMING)
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  id            String      @id @default(uuid())
+  title         String
+  description   String?
+  startsAt      DateTime    @map("starts_at")
+  endsAt        DateTime?   @map("ends_at")
+  location      String?
+  category      String?
+  imageUrl      String?     @map("image_url")
+  maxAttendees  Int?        @map("max_attendees")
+  attendeeCount Int         @default(0) @map("attendee_count")
+  isFree        Boolean     @default(true) @map("is_free")
+  ticketPrice   Float?      @map("ticket_price")
+  latitude      Float?
+  longitude     Float?
+  status        EventStatus @default(UPCOMING)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  organizerId   String?     @map("organizer_id")
+  organizer     User?       @relation(fields: [organizerId], references: [id])
 
   @@map("events")
 }
+
 
 // ─── Review ───
 model Review {
@@ -352,4 +382,75 @@ model Partnership {
   partner         User            @relation(fields: [partnerId], references: [id])
 
   @@map("partnerships")
+}
+
+// ─── Campaign (Fırsatlar & Kampanyalar) ───
+model Campaign {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  discount    String?  // "50% indirim", "2 al 1 öde" vb.
+  imageUrl    String?  @map("image_url")
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  isActive    Boolean  @default(true) @map("is_active")
+  clickCount  Int      @default(0) @map("click_count")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  businessId  String   @map("business_id")
+  business    Business @relation(fields: [businessId], references: [id])
+
+  @@map("campaigns")
+}
+
+// ─── Taxi (Taksi Durakları) ───
+model Taxi {
+  id        String   @id @default(uuid())
+  name      String
+  district  String
+  address   String?
+  phones    String[]
+  latitude  Float?
+  longitude Float?
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("taxis")
+}
+
+// ─── Pharmacy (Eczaneler & Nöbetçi) ───
+model Pharmacy {
+  id          String    @id @default(uuid())
+  name        String
+  district    String
+  address     String?
+  phone       String?
+  latitude    Float?
+  longitude   Float?
+  isDutyToday Boolean   @default(false) @map("is_duty_today")
+  dutyDate    DateTime? @map("duty_date")
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("pharmacies")
+}
+
+// ─── EmergencyAlert (Acil Durum Uyarısı) ───
+model EmergencyAlert {
+  id          String        @id @default(uuid())
+  title       String
+  message     String
+  severity    AlertSeverity @default(HIGH)
+  isActive    Boolean       @default(true) @map("is_active")
+  expiresAt   DateTime?     @map("expires_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  createdById String        @map("created_by_id")
+  createdBy   User          @relation(fields: [createdById], references: [id])
+
+  @@map("emergency_alerts")
 }

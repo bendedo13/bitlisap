@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../../services/api';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../constants/theme';
@@ -20,6 +21,7 @@ import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../consta
 export default function LoginScreen() {
   const router = useRouter();
   const { setAuth } = useAuthStore();
+  const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -46,7 +48,7 @@ export default function LoginScreen() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary[800]} />
 
       {/* Hero */}
-      <View style={styles.hero}>
+      <View style={[styles.hero, { paddingTop: insets.top + 16 }]}>
         <View style={styles.heroCircle1} />
         <View style={styles.heroCircle2} />
         <View style={styles.heroIcon}>
@@ -157,7 +159,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
   hero: {
     backgroundColor: Colors.primary[800],
-    paddingTop: (StatusBar.currentHeight || 44) + 16,
     paddingBottom: Spacing.xxl,
     alignItems: 'center',
     overflow: 'hidden',

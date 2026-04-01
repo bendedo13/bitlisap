@@ -28,6 +28,10 @@ import searchRoutes from './routes/search.routes';
 import legalRoutes from './routes/legal.routes';
 import adsRoutes from './routes/ads.routes';
 import partnershipsRoutes from './routes/partnerships.routes';
+import campaignsRoutes from './routes/campaigns.routes';
+import taxisRoutes from './routes/taxis.routes';
+import pharmaciesRoutes from './routes/pharmacies.routes';
+import alertsRoutes from './routes/alerts.routes';
 
 const app = express();
 const httpServer = createServer(app);
@@ -76,6 +80,10 @@ app.use('/api/search', searchRoutes);
 app.use('/api/legal', legalRoutes);
 app.use('/api/ads', adsRoutes);
 app.use('/api/partnerships', partnershipsRoutes);
+app.use('/api/campaigns', campaignsRoutes);
+app.use('/api/taxis', taxisRoutes);
+app.use('/api/pharmacies', pharmaciesRoutes);
+app.use('/api/alerts', alertsRoutes);
 
 app.use(notFoundHandler);
 app.use(handleUploadError);
